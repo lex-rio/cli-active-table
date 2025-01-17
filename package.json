@@ -1,0 +1,28 @@
+{
+  "name": "cli-active-table",
+  "version": "1.0.0",
+  "description": "cli tool that helps you render data in command line interface",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "tsc --noEmit && tsx src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lex-rio/cli-active-table.git"
+  },
+  "keywords": [
+    "cli",
+    "table"
+  ],
+  "author": "lex-rio",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lex-rio/cli-active-table/issues"
+  },
+  "homepage": "https://github.com/lex-rio/cli-active-table#readme",
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "tsx": "^4.19.2"
+  }
+}
