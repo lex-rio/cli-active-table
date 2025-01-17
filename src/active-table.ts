@@ -98,12 +98,11 @@ class Section<T extends unknown = unknown> {
 
   filter(filterTokens: string[] = []) {}
 
-  protected wrap(rows: string[], totalRowsNum: number) {
-    const scrollSize = Math.ceil(
-      (rows.length * rows.length) / totalRowsNum
-    );
+  protected wrap(rows: string[], totalNum: number) {
+    const highlight = { style: 'bold' } as const;
+    const scrollSize = Math.ceil((rows.length * rows.length) / totalNum);
     const scrollStart = Math.floor(
-      (this.viewportPos / totalRowsNum) * rows.length
+      (this.viewportPos / totalNum) * rows.length
     );
     const scrollEnd = scrollStart + scrollSize;
     const {
@@ -114,36 +113,28 @@ class Section<T extends unknown = unknown> {
       leftBottom,
       rightBottom,
       scroll,
-    } = this.getBorders();
+    } = borders;
+    const verticalBorder = this.isActive
+      ? chalk(vertical, highlight)
+      : vertical;
     const len = this.size.width;
+    const borderChunk = new Array(
+      Math.floor((len - this.title.length - 1) / 2)
+    ).join(horisontal);
+    let titledBorder = `${borderChunk} ${this.title} ${borderChunk}`;
+    titledBorder += len > titledBorder.length + 1 ? horisontal : '';
+    const top = `${leftTop}${titledBorder}${rightTop}`;
+    const bottom = `${leftBottom}${titledBorder}${rightBottom}`;
     return [
-      `${leftTop}${this.title}${new Array(len - this.title.length).join(
-        horisontal
-      )}${rightTop}`,
+      `${this.isActive ? chalk(top, highlight) : top}`,
       ...rows.map(
         (row, i) =>
-          `${vertical}${row}${
-            i >= scrollStart && i < scrollEnd ? scroll : vertical
+          `${verticalBorder}${row}${
+            i >= scrollStart && i < scrollEnd ? scroll : verticalBorder
           }`
       ),
-      `${leftBottom}${new Array(len).join(horisontal)}${rightBottom}`,
+      `${this.isActive ? chalk(bottom, highlight) : bottom}`,
     ];
-  }
-
-  private getBorders() {
-    if (this.isActive) {
-      const ret = {} as typeof borders;
-      for (const key in borders) {
-        ret[key as keyof typeof borders] = chalk(
-          borders[key as keyof typeof borders],
-          {
-            style: 'bold',
-          }
-        );
-      }
-      return ret;
-    }
-    return borders;
   }
 }
 
@@ -360,13 +351,13 @@ export class ActiveTable<Types extends object[]> {
     rows: process.stdout.rows,
   };
 
-  constructor(sections: {
-    [Index in keyof Types]: TSection<Types[Index]>;
-  }) {
+  constructor(
+    ...sections: { [Index in keyof Types]: TSection<Types[Index]> }
+  ) {
     this.sections.push(
       ...sections.map((config) => {
         const section = new ListSection(config);
-        section.size = { height: 20, width: 20 };
+        section.size = { height: 20 };
         return section;
       })
     );
