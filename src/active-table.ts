@@ -13,16 +13,6 @@ const searchHighlightColor = 'magenta';
 const searchTypes = ['string', 'number'];
 const columnSeparator = ' ';
 
-const hint = `Controls:
-- Arrow Keys: Navigate
-- Space: Select/Deselect
-- F: Filter Mode
-- A: Select All/Deselect All
-- D: Delete Selected/Row
-- Enter: Actions
-- Esc: Confirm
-`;
-
 type BaseOptions<T extends object, F extends keyof T> = {
   fields?: F[];
   title?: string;
@@ -40,7 +30,7 @@ type TSection<T extends object> = {
   data: T[];
 } & Options<T>;
 
-const borders = {
+const border = {
   vertical: '│',
   horisontal: '─',
   leftTop: '┌',
@@ -53,6 +43,9 @@ const borders = {
 class Section<T extends unknown = unknown> {
   viewportPos = 0;
   #cursorPos = 0;
+  protected filterMode = false;
+  protected filter = '';
+  protected filterTokens: string[] = [];
   private height = 0;
   private width = 0;
 
@@ -87,8 +80,7 @@ class Section<T extends unknown = unknown> {
       this.#cursorPos >=
       this.viewportPos + Math.min(this.size.height, filtered)
     ) {
-      this.viewportPos =
-        this.#cursorPos - Math.min(this.size.height, filtered) + 1;
+      this.viewportPos = this.#cursorPos - Math.min(this.size.height, filtered) + 1;
     }
   }
 
@@ -96,35 +88,62 @@ class Section<T extends unknown = unknown> {
     return { size: this.size, rows: [] as string[] };
   }
 
-  filter(filterTokens: string[] = []) {}
+  handleTyping(key: Key) {
+    if (!this.filterMode) return;
+    if (key.name === 'backspace') {
+      this.filter = key.ctrl ? '' : this.filter.slice(0, -1) || '';
+    } else {
+      this.filter += key.sequence.toLowerCase();
+    }
+    this.filterTokens = this.filter.trim().split(' ').filter(Boolean);
+    this.filterData(this.filterTokens);
+  }
+
+  filterData(filterTokens: string[] = []) {}
+
+  protected limitString(len: number, string = '') {
+    return `...${string.slice(string.length + 4 - len)}`;
+  }
+
+  private borderHorisontal(len: number, text?: string) {
+    if (!text) {
+      return new Array(len).join(border.horisontal);
+    }
+    const textLen = text.replace(/\x1b\[[0-9;]*m/g, '').length;
+    if (textLen > len) {
+      return this.limitString(len, text);
+    }
+    const borderChunk = new Array(Math.floor((len - textLen - 1) / 2)).join(
+      border.horisontal
+    );
+    let borderLine = `${borderChunk} ${text} ${borderChunk}`;
+    borderLine +=
+      len > borderChunk.length * 2 + textLen + 3 ? border.horisontal : '';
+    return borderLine;
+  }
+
+  private renderFilter(title = '🔎 ') {
+    return this.isActive && this.filterMode
+      ? chalk(title + this.filter, {
+          color: searchHighlightColor,
+          bgColor: 'white',
+        })
+      : title + this.filter;
+  }
 
   protected wrap(rows: string[], totalNum: number) {
     const highlight = { style: 'bold' } as const;
     const scrollSize = Math.ceil((rows.length * rows.length) / totalNum);
-    const scrollStart = Math.floor(
-      (this.viewportPos / totalNum) * rows.length
-    );
+    const scrollStart = Math.floor((this.viewportPos / totalNum) * rows.length);
     const scrollEnd = scrollStart + scrollSize;
-    const {
-      leftTop,
-      horisontal,
-      rightTop,
-      vertical,
-      leftBottom,
-      rightBottom,
-      scroll,
-    } = borders;
-    const verticalBorder = this.isActive
-      ? chalk(vertical, highlight)
-      : vertical;
+    const { leftTop, rightTop, vertical, leftBottom, rightBottom, scroll } = border;
+    const verticalBorder = this.isActive ? chalk(vertical, highlight) : vertical;
     const len = this.size.width;
-    const borderChunk = new Array(
-      Math.floor((len - this.title.length - 1) / 2)
-    ).join(horisontal);
-    let titledBorder = `${borderChunk} ${this.title} ${borderChunk}`;
-    titledBorder += len > titledBorder.length + 1 ? horisontal : '';
-    const top = `${leftTop}${titledBorder}${rightTop}`;
-    const bottom = `${leftBottom}${titledBorder}${rightBottom}`;
+    const top = `${leftTop}${this.borderHorisontal(len, this.title)}${rightTop}`;
+    const bottom = `${leftBottom}${this.borderHorisontal(
+      len,
+      this.renderFilter()
+    )}${rightBottom}`;
     return [
       `${this.isActive ? chalk(top, highlight) : top}`,
       ...rows.map(
@@ -143,14 +162,12 @@ class ListSection<T extends object> extends Section<T> {
   private selected: Set<T[keyof T]> = new Set();
   private primary: keyof T;
   private columnsWidthes: number[];
-  private filterRegExp: RegExp;
-  private filterTokens: string[];
   private fields?: Options<T>['fields'];
+  private filterRegExp: RegExp;
   constructor({ data, ...options }: TSection<T>) {
     super(data, options.title);
     this.entities = data;
-    const fields =
-      options.fields || (Object.keys(data[0]) as Options<T>['fields']);
+    const fields = options.fields || (Object.keys(data[0]) as Options<T>['fields']);
     this.primary =
       'primary' in options
         ? (options.primary as keyof T)
@@ -167,10 +184,7 @@ class ListSection<T extends object> extends Section<T> {
       ),
     ];
     this.size = {
-      width: columnsWidthes.reduce(
-        (a, b) => a + b + columnSeparator.length,
-        0
-      ),
+      width: columnsWidthes.reduce((a, b) => a + b + columnSeparator.length, 0),
       height: 0,
     };
     this.columnsWidthes = columnsWidthes;
@@ -182,26 +196,42 @@ class ListSection<T extends object> extends Section<T> {
       if (this.selected.size === this.entities.length) {
         this.selected.clear();
       } else {
-        this.filtered.forEach((entity) =>
-          this.selected.add(entity[this.primary])
-        );
+        this.filtered.forEach((entity) => this.selected.add(entity[this.primary]));
       }
     },
     d: () => this.deleteRows(),
     delete: () => this.deleteRows(),
+    f: () => (this.filterMode = true),
   };
 
   navigation = {
-    up: () => this.cursorPos--,
-    down: () => this.cursorPos++,
-    pageup: () => (this.cursorPos -= this.size.height),
-    pagedown: () => (this.cursorPos += this.size.height),
-    left: () => (this.cursorPos -= this.filtered.length),
-    right: () => (this.cursorPos += this.filtered.length),
+    up: () => {
+      this.filterMode = false;
+      this.cursorPos--;
+    },
+    down: () => {
+      this.filterMode = false;
+      this.cursorPos++;
+    },
+    pageup: () => {
+      this.filterMode = false;
+      this.cursorPos -= this.size.height;
+    },
+    pagedown: () => {
+      this.filterMode = false;
+      this.cursorPos += this.size.height;
+    },
+    left: () => {
+      this.filterMode = false;
+      this.cursorPos -= this.filtered.length;
+    },
+    right: () => {
+      this.filterMode = false;
+      this.cursorPos += this.filtered.length;
+    },
   };
 
-  filter(filterTokens: string[] = []) {
-    this.filterTokens = filterTokens;
+  filterData(filterTokens: string[] = []) {
     this.filterRegExp =
       filterTokens.length && new RegExp(filterTokens.join('|'), 'gi');
     this.filtered = filterTokens.length
@@ -212,42 +242,47 @@ class ListSection<T extends object> extends Section<T> {
   }
 
   render() {
-    const rows = this.getVisible().map(
-      ({ entity, isSelected, isCursor }, i) =>
-        chalk(
-          this.renderRow(
-            [
-              isSelected ? chalk('✔', 'green') : ' ',
-              ...this.fields.map((f) => entity[f]),
-            ],
-            this.filterTokens
-          ),
-          isCursor
-            ? { bgColor: 'blue', color: 'black' }
-            : i % 2
-            ? { bgColor: 'dark' }
-            : {}
-        )
+    const rows = this.getVisible().map(({ entity, isSelected, isCursor }, i) =>
+      chalk(
+        this.renderRow(
+          [
+            isSelected ? chalk('✔', 'green') : ' ',
+            ...this.fields.map((f) => entity[f]),
+          ],
+          this.filterTokens
+        ),
+        isCursor
+          ? { bgColor: 'blue', color: 'black' }
+          : i % 2
+          ? { bgColor: 'dark' }
+          : {}
+      )
     );
-    const header = chalk(
-      this.renderRow(['', ...this.fields] as string[]),
-      {
-        style: 'inverted',
-      }
-    );
+    const header = chalk(this.renderRow(['', ...this.fields] as string[]), {
+      style: 'inverted',
+    });
     const footer = this.renderFooter();
+    const emptyRow = new Array(this.size.width).join(' ');
+    const emptyRows = new Array(this.size.height - rows.length).fill(emptyRow);
+
     return {
       size: this.size,
-      rows: this.wrap([header, ...rows, footer], this.filtered.length),
+      rows: this.wrap([header, ...rows, ...emptyRows, footer], this.filtered.length),
     };
+  }
+
+  handleTyping(key: Key) {
+    if (!this.filterMode && key.name === 'space') {
+      return this.toggleActiveRow();
+    }
+    super.handleTyping(key);
   }
 
   private entityMatchFilter(entity: T, tokens: string[]) {
     const str = this.fields
       .reduce(
         (acc, f) => (
-          searchTypes.includes(typeof entity[f]) && acc.push(entity[f]),
-          acc
+          searchTypes.includes(typeof entity[f]) && acc.push(entity[f]), acc
         ),
         []
       )
@@ -282,7 +317,7 @@ class ListSection<T extends object> extends Section<T> {
       this.selected.delete(deleteId);
       this.entities.splice(index, 1);
     }
-    this.filter();
+    // this.filter();
   }
 
   private renderFooter() {
@@ -298,15 +333,10 @@ class ListSection<T extends object> extends Section<T> {
 
   toggleActiveRow() {
     const id = this.filtered[this.cursorPos][this.primary];
-    this.selected.has(id)
-      ? this.selected.delete(id)
-      : this.selected.add(id);
+    this.selected.has(id) ? this.selected.delete(id) : this.selected.add(id);
   }
 
-  private renderRow(
-    cells: (string | T[keyof T])[],
-    filterTokens?: string[]
-  ) {
+  private renderRow(cells: (string | T[keyof T])[], filterTokens?: string[]) {
     return [
       ...cells.map((cell, i) => {
         const cellType = typeof cell;
@@ -342,18 +372,13 @@ class ListSection<T extends object> extends Section<T> {
 }
 
 export class ActiveTable<Types extends object[]> {
-  private filterMode = false;
-  private filter = '';
-  private filterTokens: string[] = [];
   private sections: Section[] = [];
   private viewport = {
     columns: process.stdout.columns,
     rows: process.stdout.rows,
   };
 
-  constructor(
-    ...sections: { [Index in keyof Types]: TSection<Types[Index]> }
-  ) {
+  constructor(...sections: { [Index in keyof Types]: TSection<Types[Index]> }) {
     this.sections.push(
       ...sections.map((config) => {
         const section = new ListSection(config);
@@ -366,7 +391,6 @@ export class ActiveTable<Types extends object[]> {
 
   private keyActions = {
     c: () => process.exit(0),
-    f: () => (this.filterMode = true),
   };
 
   private clearScreen() {
@@ -375,15 +399,6 @@ export class ActiveTable<Types extends object[]> {
 
   private clear() {
     process.stdout.write('\u001b[H\u001b[J');
-  }
-
-  private renderFilterRow(title = '🔎 ') {
-    return this.filterMode
-      ? chalk(title + this.filter, {
-          color: searchHighlightColor,
-          bgColor: 'white',
-        })
-      : title + this.filter;
   }
 
   private render() {
@@ -398,9 +413,7 @@ export class ActiveTable<Types extends object[]> {
     const result: string[] = [];
 
     values.forEach(({ size, rows }) => {
-      rows.forEach(
-        (row, i) => (result[i] = result[i] ? result[i] + row : row)
-      );
+      rows.forEach((row, i) => (result[i] = result[i] ? result[i] + row : row));
     });
     console.log(result.join('\n'));
   }
@@ -417,22 +430,6 @@ export class ActiveTable<Types extends object[]> {
     next.isActive = true;
   }
 
-  private handleTyping(key: Key) {
-    if (key.name === 'backspace') {
-      this.filter = key.ctrl ? '' : this.filter.slice(0, -1) || '';
-    } else {
-      this.filter += key.sequence.toLowerCase();
-    }
-    this.filterTokens = this.filter.trim().split(' ').filter(Boolean);
-    const activeSection = this.sections.find(
-      (section) => section instanceof ListSection
-    );
-    activeSection.filter(this.filterTokens);
-  }
-
-  // @todo: implement
-  private renderContextMenu() {}
-
   private handleResize() {
     process.stdout.on('resize', () => {
       this.viewport.columns = process.stdout.columns;
@@ -442,9 +439,7 @@ export class ActiveTable<Types extends object[]> {
   }
 
   private get activeSection() {
-    return (
-      this.sections.find(({ isActive }) => isActive) || this.sections[0]
-    );
+    return this.sections.find(({ isActive }) => isActive) || this.sections[0];
   }
 
   async handle() {
@@ -463,39 +458,23 @@ export class ActiveTable<Types extends object[]> {
         const activeSection = this.activeSection;
         if (key.name === 'tab') {
           this.rotateSections(key.shift);
-        } else if (
-          !this.filterMode &&
-          key.name === 'space' &&
-          activeSection instanceof ListSection
-        ) {
-          activeSection.toggleActiveRow();
         } else if (key.name in activeSection.navigation) {
-          this.filterMode = false;
           activeSection.navigation[
             key.name as keyof typeof activeSection.navigation
           ]();
         } else if (
-          key.name in activeSection.keyActions ||
+          (key.ctrl && key.name in activeSection.keyActions) ||
           key.name === 'delete'
         ) {
           activeSection.keyActions[
             key.name as keyof typeof activeSection.keyActions
           ]();
         } else if (key.ctrl && key.name in this.keyActions) {
-          this.filterMode = false;
           this.keyActions[key.name as keyof typeof this.keyActions]();
-        } else if (key.name === 'return') {
-          this.renderContextMenu();
         } else if (key.name === 'escape') {
-          if (this.filterMode) {
-            this.filterMode = false;
-          } else {
-            resolve(['todo']);
-          }
-        } else if (this.filterMode) {
-          this.handleTyping(key);
+          resolve(['todo']);
         } else {
-          return;
+          activeSection.handleTyping(key);
         }
         this.render();
       });

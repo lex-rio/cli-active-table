@@ -13,7 +13,8 @@ const run = async () => {
       data: list2,
       primary: 'id',
       fields: ['title', 'description'],
-      title: 'list2',
+      title:
+        'very long title 1 very long title 2 very long title 3 very long title 4 very long title 5',
     }
   ).handle();
 };
