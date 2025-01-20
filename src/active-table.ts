@@ -78,7 +78,6 @@ class Section<T extends unknown = unknown> {
   }
 
   set cursorPos(val) {
-    this.filterMode = false;
     const filtered = this.filtered.length;
     this.#cursorPos = Math.max(0, Math.min(val, filtered - 1));
     if (this.#cursorPos < this.viewportPos) {
@@ -221,6 +220,7 @@ class ListSection<T extends object> extends Section<T> {
   };
 
   filterData(filterTokens: string[] = []) {
+    this.cursorPos = 0;
     this.filterRegExp =
       filterTokens.length && new RegExp(filterTokens.join('|'), 'gi');
     this.filtered = filterTokens.length
