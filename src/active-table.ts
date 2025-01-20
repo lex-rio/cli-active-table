@@ -43,6 +43,7 @@ const border = {
 class Section<T extends unknown = unknown> {
   viewportPos = 0;
   #cursorPos = 0;
+  #isActive = false;
   protected filterMode = false;
   protected filter = '';
   protected filterTokens: string[] = [];
@@ -52,11 +53,16 @@ class Section<T extends unknown = unknown> {
   keyActions: Record<string, () => unknown> = {};
   navigation: Record<string, () => void> = {};
 
-  constructor(
-    protected filtered: T[],
-    private title: string,
-    public isActive = false
-  ) {}
+  constructor(protected filtered: T[], private title: string) {}
+
+  get isActive() {
+    return this.#isActive;
+  }
+
+  set isActive(val: boolean) {
+    this.filterMode = false;
+    this.#isActive = val;
+  }
 
   get size() {
     return { height: this.height, width: this.width };
@@ -72,6 +78,7 @@ class Section<T extends unknown = unknown> {
   }
 
   set cursorPos(val) {
+    this.filterMode = false;
     const filtered = this.filtered.length;
     this.#cursorPos = Math.max(0, Math.min(val, filtered - 1));
     if (this.#cursorPos < this.viewportPos) {
@@ -123,7 +130,7 @@ class Section<T extends unknown = unknown> {
   }
 
   private renderFilter(title = '🔎 ') {
-    return this.isActive && this.filterMode
+    return this.#isActive && this.filterMode
       ? chalk(title + this.filter, {
           color: searchHighlightColor,
           bgColor: 'white',
@@ -137,7 +144,7 @@ class Section<T extends unknown = unknown> {
     const scrollStart = Math.floor((this.viewportPos / totalNum) * rows.length);
     const scrollEnd = scrollStart + scrollSize;
     const { leftTop, rightTop, vertical, leftBottom, rightBottom, scroll } = border;
-    const verticalBorder = this.isActive ? chalk(vertical, highlight) : vertical;
+    const verticalBorder = this.#isActive ? chalk(vertical, highlight) : vertical;
     const len = this.size.width;
     const top = `${leftTop}${this.borderHorisontal(len, this.title)}${rightTop}`;
     const bottom = `${leftBottom}${this.borderHorisontal(
@@ -145,14 +152,14 @@ class Section<T extends unknown = unknown> {
       this.renderFilter()
     )}${rightBottom}`;
     return [
-      `${this.isActive ? chalk(top, highlight) : top}`,
+      `${this.#isActive ? chalk(top, highlight) : top}`,
       ...rows.map(
         (row, i) =>
           `${verticalBorder}${row}${
             i >= scrollStart && i < scrollEnd ? scroll : verticalBorder
           }`
       ),
-      `${this.isActive ? chalk(bottom, highlight) : bottom}`,
+      `${this.#isActive ? chalk(bottom, highlight) : bottom}`,
     ];
   }
 }
@@ -205,30 +212,12 @@ class ListSection<T extends object> extends Section<T> {
   };
 
   navigation = {
-    up: () => {
-      this.filterMode = false;
-      this.cursorPos--;
-    },
-    down: () => {
-      this.filterMode = false;
-      this.cursorPos++;
-    },
-    pageup: () => {
-      this.filterMode = false;
-      this.cursorPos -= this.size.height;
-    },
-    pagedown: () => {
-      this.filterMode = false;
-      this.cursorPos += this.size.height;
-    },
-    left: () => {
-      this.filterMode = false;
-      this.cursorPos -= this.filtered.length;
-    },
-    right: () => {
-      this.filterMode = false;
-      this.cursorPos += this.filtered.length;
-    },
+    up: () => this.cursorPos--,
+    down: () => this.cursorPos++,
+    pageup: () => (this.cursorPos -= this.size.height),
+    pagedown: () => (this.cursorPos += this.size.height),
+    left: () => (this.cursorPos -= this.filtered.length),
+    right: () => (this.cursorPos += this.filtered.length),
   };
 
   filterData(filterTokens: string[] = []) {
@@ -337,8 +326,8 @@ class ListSection<T extends object> extends Section<T> {
   }
 
   private renderRow(cells: (string | T[keyof T])[], filterTokens?: string[]) {
-    return [
-      ...cells.map((cell, i) => {
+    return cells
+      .map((cell, i) => {
         const cellType = typeof cell;
         cell = this.prepareCell(cell);
         const padedEl = `${cell}`.padEnd(this.columnsWidthes[i]);
@@ -350,8 +339,8 @@ class ListSection<T extends object> extends Section<T> {
               chalk(s, { color: searchHighlightColor })
             )
           : padedEl;
-      }),
-    ].join(columnSeparator);
+      })
+      .join(columnSeparator);
   }
 
   private stringMatchFilter(str: string, tokens: string[]) {
