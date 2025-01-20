@@ -33,10 +33,10 @@ type TSection<T extends object> = {
 const border = {
   vertical: '│',
   horisontal: '─',
-  leftTop: '┌',
-  rightTop: '┐',
-  leftBottom: '└',
-  rightBottom: '┘',
+  leftTop: '╭',
+  rightTop: '╮',
+  leftBottom: '╰',
+  rightBottom: '╯',
   scroll: '▓',
 };
 
