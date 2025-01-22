@@ -282,7 +282,7 @@ class ListSection<T extends object> extends Section<T> {
       return cell.toISOString();
     }
     const cellType = typeof cell;
-    if (cellType === 'object') {
+    if (cell && cellType === 'object') {
       return cellType;
     }
     return `${cell}`;
@@ -325,12 +325,10 @@ class ListSection<T extends object> extends Section<T> {
   private renderRow(cells: (string | T[keyof T])[], filterTokens?: string[]) {
     return cells
       .map((cell, i) => {
-        const cellType = typeof cell;
-        cell = this.prepareCell(cell);
-        const padedEl = `${cell}`.padEnd(this.columnsWidthes[i]);
+        const padedEl = this.prepareCell(cell).padEnd(this.columnsWidthes[i]);
         return this.filterRegExp &&
           filterTokens &&
-          searchTypes.includes(cellType) &&
+          searchTypes.includes(typeof cell) &&
           this.stringMatchFilter(padedEl, filterTokens)
           ? padedEl.replace(this.filterRegExp, (s) =>
               chalk(s, { color: searchHighlightColor })
@@ -368,7 +366,7 @@ export class ActiveTable<Types extends object[]> {
     this.sections.push(
       ...sections.map((config) => {
         const section = new ListSection(config);
-        section.size = { height: 20 };
+        section.size = { height: Math.floor(this.viewport.rows / 2) - 4 };
         return section;
       })
     );
