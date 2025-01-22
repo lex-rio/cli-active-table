@@ -101,7 +101,10 @@ class Section<T extends unknown = unknown> {
     } else {
       this.filter += key.sequence.toLowerCase();
     }
-    this.filterTokens = this.filter.trim().split(' ').filter(Boolean);
+    this.filterTokens =
+      this.filter
+        .match(/"([^"]+)"|\S+/g)
+        ?.map((token) => token.replace(/(^"|"$)/g, '')) || [];
     this.filterData(this.filterTokens);
   }
 
