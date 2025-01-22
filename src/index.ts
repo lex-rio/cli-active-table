@@ -10,6 +10,20 @@ const run = async () => {
       title: 'list',
     },
     {
+      data: list,
+      primary: 'id',
+      fields: ['name'],
+      title: 'list',
+      lines: 10,
+    },
+    {
+      data: list2,
+      primary: 'id',
+      fields: ['title', 'description'],
+      title:
+        'very long title 1 very long title 2 very long title 3 very long title 4 very long title 5',
+    },
+    {
       data: list2,
       primary: 'id',
       fields: ['title', 'description'],

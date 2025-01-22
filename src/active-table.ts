@@ -16,9 +16,9 @@ const columnSeparator = ' ';
 type BaseOptions<T extends object, F extends keyof T> = {
   fields?: F[];
   title?: string;
+  lines?: number;
+  height?: number;
 };
-
-type Size = { height?: number; width?: number };
 
 type Options<T extends object, F extends keyof T = keyof T> = T extends {
   id: F;
@@ -47,8 +47,7 @@ class Section<T extends unknown = unknown> {
   protected filterMode = false;
   protected filter = '';
   protected filterTokens: string[] = [];
-  private height = 0;
-  private width = 0;
+  size: { lines: number; width: number };
 
   keyActions: Record<string, () => unknown> = {};
   navigation: Record<string, () => void> = {};
@@ -64,15 +63,6 @@ class Section<T extends unknown = unknown> {
     this.#isActive = val;
   }
 
-  get size() {
-    return { height: this.height, width: this.width };
-  }
-
-  set size({ height, width }: Size) {
-    this.height ||= height;
-    this.width ||= width;
-  }
-
   get cursorPos() {
     return this.#cursorPos;
   }
@@ -84,9 +74,9 @@ class Section<T extends unknown = unknown> {
       this.viewportPos = this.#cursorPos;
     } else if (
       this.#cursorPos >=
-      this.viewportPos + Math.min(this.size.height, filtered)
+      this.viewportPos + Math.min(this.size.lines, filtered)
     ) {
-      this.viewportPos = this.#cursorPos - Math.min(this.size.height, filtered) + 1;
+      this.viewportPos = this.#cursorPos - Math.min(this.size.lines, filtered) + 1;
     }
   }
 
@@ -192,9 +182,10 @@ class ListSection<T extends object> extends Section<T> {
         )
       ),
     ];
+    const extraRowsCount = 4; // horisonral borders + header and fuuter
     this.size = {
       width: columnsWidthes.reduce((a, b) => a + b + columnSeparator.length, 0),
-      height: 0,
+      lines: options.lines ? options.lines : options.height - extraRowsCount,
     };
     this.columnsWidthes = columnsWidthes;
     this.fields ||= fields;
@@ -216,8 +207,8 @@ class ListSection<T extends object> extends Section<T> {
   navigation = {
     up: () => this.cursorPos--,
     down: () => this.cursorPos++,
-    pageup: () => (this.cursorPos -= this.size.height),
-    pagedown: () => (this.cursorPos += this.size.height),
+    pageup: () => (this.cursorPos -= this.size.lines),
+    pagedown: () => (this.cursorPos += this.size.lines),
     left: () => (this.cursorPos -= this.filtered.length),
     right: () => (this.cursorPos += this.filtered.length),
   };
@@ -255,7 +246,7 @@ class ListSection<T extends object> extends Section<T> {
     });
     const footer = this.renderFooter();
     const emptyRow = new Array(this.size.width).join(' ');
-    const emptyRows = new Array(this.size.height - rows.length).fill(emptyRow);
+    const emptyRows = new Array(this.size.lines - rows.length).fill(emptyRow);
 
     return this.wrap([header, ...rows, ...emptyRows, footer], this.filtered.length);
   }
@@ -348,7 +339,7 @@ class ListSection<T extends object> extends Section<T> {
   private getVisible() {
     const visible = this.filtered.slice(
       this.viewportPos,
-      this.viewportPos + this.size.height
+      this.viewportPos + this.size.lines
     );
     return visible.map((entity, i) => ({
       entity,
@@ -360,19 +351,14 @@ class ListSection<T extends object> extends Section<T> {
 
 export class ActiveTable<Types extends object[]> {
   private sections: Section[] = [];
-  private viewport = {
-    columns: process.stdout.columns,
-    rows: process.stdout.rows - 1,
-  };
+  private viewport: { columns: number; rows: number };
 
   constructor(...sections: { [Index in keyof Types]: TSection<Types[Index]> }) {
-    this.sections.push(
-      ...sections.map((config) => {
-        const section = new ListSection(config);
-        section.size = { height: Math.floor(this.viewport.rows / 2) - 4 };
-        return section;
-      })
-    );
+    this.updateViewport();
+    const layoutLines = 2;
+
+    const height = Math.floor(this.viewport.rows / layoutLines);
+    this.sections = sections.map((config) => new ListSection({ height, ...config }));
     this.sections[0].isActive = true;
   }
 
@@ -393,27 +379,50 @@ export class ActiveTable<Types extends object[]> {
     this.layoutRender(this.sections);
   }
 
+  // @ToDo: refactor this ugly code
   private layoutRender(sections: Section[]) {
-    // const canvasRow = new Array(this.viewport.columns).join(' ');
     const canvas: string[] = new Array(this.viewport.rows).fill('');
-    let renderedW = 0;
-    let maxHeight = 0;
+    const renderedSections = sections.map((section) => section.render());
+    let lineNumber = 0;
+    const coords = { x: 0, y: 0 };
+    const lines = sections.reduce(
+      (lines, section, i) => {
+        lines[lineNumber] ||= { lineHeight: 0, coords: [] };
+        if (coords.x + section.size.width > this.viewport.columns) {
+          coords.x = 0;
+          coords.y += lines[lineNumber].lineHeight;
+          lines[++lineNumber] = { lineHeight: 0, coords: [] };
+        }
+        lines[lineNumber].coords.push({ ...coords });
+        coords.x += section.size.width;
+        lines[lineNumber].lineHeight = Math.max(
+          lines[lineNumber].lineHeight,
+          renderedSections[i].length
+        );
 
-    sections.reduce((vertical, section) => {
-      renderedW += section.size.width;
-      const rows = section.render();
-      maxHeight = Math.max(maxHeight, rows.length);
-      if (renderedW > this.viewport.columns) {
-        vertical += maxHeight;
-        maxHeight = 0;
-        renderedW = section.size.width;
-      }
-      rows.forEach((row, rowIndex) => {
-        if (typeof canvas[rowIndex + vertical] === 'undefined') return;
-        canvas[rowIndex + vertical] = canvas[rowIndex + vertical] + row;
+        return lines;
+      },
+      [] as {
+        lineHeight: number;
+        coords: { x: number; y: number }[];
+      }[]
+    );
+    let i = 0;
+    lines.forEach(({ lineHeight, coords }) => {
+      coords.forEach(({ y }) => {
+        const rows = renderedSections[i];
+        const rest = new Array(lineHeight - rows.length).fill(
+          new Array(sections[i].size.width + 2).join(' ')
+        );
+
+        [...rows, ...rest].forEach((row, rowIndex) => {
+          const canvasRowIndex = y + rowIndex;
+          if (typeof canvas[canvasRowIndex] === 'undefined') return;
+          canvas[canvasRowIndex] = canvas[canvasRowIndex] + row;
+        });
+        i++;
       });
-      return vertical;
-    }, 0);
+    });
     console.log(canvas.join('\n'));
   }
 
@@ -429,22 +438,24 @@ export class ActiveTable<Types extends object[]> {
     next.isActive = true;
   }
 
-  private handleResize() {
-    process.stdout.on('resize', () => {
-      this.viewport.columns = process.stdout.columns;
-      this.viewport.rows = process.stdout.rows - 1;
-      this.render();
-    });
-  }
-
   private get activeSection() {
     return this.sections.find(({ isActive }) => isActive) || this.sections[0];
+  }
+
+  private updateViewport() {
+    this.viewport = {
+      columns: process.stdout.columns,
+      rows: process.stdout.rows - 1,
+    };
   }
 
   async handle() {
     this.clearScreen();
     this.render();
-    this.handleResize();
+    process.stdout.on('resize', () => {
+      this.updateViewport();
+      this.render();
+    });
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
