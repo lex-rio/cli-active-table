@@ -40,6 +40,17 @@ const border = {
   scroll: '▓',
 };
 
+function prepareCell(cell: unknown) {
+  if (cell instanceof Date) {
+    return cell.toISOString();
+  }
+  const cellType = typeof cell;
+  if (cell && cellType === 'object') {
+    return cellType;
+  }
+  return `${cell}`;
+}
+
 class Section<T extends unknown = unknown> {
   viewportPos = 0;
   #cursorPos = 0;
@@ -47,12 +58,17 @@ class Section<T extends unknown = unknown> {
   protected filterMode = false;
   protected filter = '';
   protected filterTokens: string[] = [];
-  size: { lines: number; width: number };
 
   keyActions: Record<string, () => unknown> = {};
   navigation: Record<string, () => void> = {};
 
-  constructor(protected filtered: T[], private title: string) {}
+  constructor(
+    protected filtered: T[],
+    private title: string,
+    public size: { lines: number; width: number }
+  ) {
+    this.title = this.limitString(this.size.width, this.title);
+  }
 
   get isActive() {
     return this.#isActive;
@@ -100,8 +116,10 @@ class Section<T extends unknown = unknown> {
 
   filterData(filterTokens: string[] = []) {}
 
-  protected limitString(len: number, string = '') {
-    return `...${string.slice(string.length + 4 - len)}`;
+  protected limitString(limit: number, string = '') {
+    return string.length >= limit
+      ? `…${string.slice(string.length + 4 - limit)}`
+      : string;
   }
 
   private borderHorisontal(len: number, text?: string) {
@@ -109,9 +127,7 @@ class Section<T extends unknown = unknown> {
       return new Array(len).join(border.horisontal);
     }
     const textLen = text.replace(/\x1b\[[0-9;]*m/g, '').length;
-    if (textLen > len) {
-      return this.limitString(len, text);
-    }
+
     const borderChunk = new Array(Math.floor((len - textLen - 1) / 2)).join(
       border.horisontal
     );
@@ -121,13 +137,18 @@ class Section<T extends unknown = unknown> {
     return borderLine;
   }
 
-  private renderFilter(title = '🔎 ') {
+  private renderFilter(title = '🔎') {
+    const extraLen = 2; // spaces
+    const text = `${title}${this.limitString(
+      this.size.width - extraLen - title.length,
+      this.filter
+    )}`;
     return this.#isActive && this.filterMode
-      ? chalk(title + this.filter, {
+      ? chalk(text, {
           color: searchHighlightColor,
           bgColor: 'white',
         })
-      : title + this.filter;
+      : text;
   }
 
   protected wrap(rows: string[], totalNum: number) {
@@ -164,29 +185,28 @@ class ListSection<T extends object> extends Section<T> {
   private fields?: Options<T>['fields'];
   private filterRegExp: RegExp;
   constructor({ data, ...options }: TSection<T>) {
-    super(data, options.title);
-    this.entities = data;
     const fields = options.fields || (Object.keys(data[0]) as Options<T>['fields']);
+    const columnsWidthes = [
+      1,
+      ...fields.map((field) =>
+        Math.max(
+          ...data.map((entity) => prepareCell(entity[field]).length),
+          (field as string).length
+        )
+      ),
+    ];
+    const extraRowsCount = 4; // horisonral borders + header and footer
+    super(data, options.title, {
+      width: columnsWidthes.reduce((a, b) => a + b + columnSeparator.length, 0),
+      lines: options.lines ? options.lines : options.height - extraRowsCount,
+    });
+    this.entities = data;
     this.primary =
       'primary' in options
         ? (options.primary as keyof T)
         : this.fields.includes('id' as keyof T)
         ? ('id' as keyof T)
         : undefined;
-    const columnsWidthes = [
-      1,
-      ...fields.map((field) =>
-        Math.max(
-          ...data.map((entity) => this.prepareCell(entity[field]).length),
-          (field as string).length
-        )
-      ),
-    ];
-    const extraRowsCount = 4; // horisonral borders + header and fuuter
-    this.size = {
-      width: columnsWidthes.reduce((a, b) => a + b + columnSeparator.length, 0),
-      lines: options.lines ? options.lines : options.height - extraRowsCount,
-    };
     this.columnsWidthes = columnsWidthes;
     this.fields ||= fields;
   }
@@ -271,17 +291,6 @@ class ListSection<T extends object> extends Section<T> {
     return tokens.every((token) => str.includes(token));
   }
 
-  protected prepareCell(cell: string | T[keyof T]) {
-    if (cell instanceof Date) {
-      return cell.toISOString();
-    }
-    const cellType = typeof cell;
-    if (cell && cellType === 'object') {
-      return cellType;
-    }
-    return `${cell}`;
-  }
-
   //delete selected or delete one under cursor
   private deleteRows() {
     if (this.selected.size) {
@@ -297,7 +306,7 @@ class ListSection<T extends object> extends Section<T> {
       this.selected.delete(deleteId);
       this.entities.splice(index, 1);
     }
-    // this.filter();
+    this.cursorPos = this.cursorPos;
   }
 
   private renderFooter() {
@@ -319,7 +328,7 @@ class ListSection<T extends object> extends Section<T> {
   private renderRow(cells: (string | T[keyof T])[], filterTokens?: string[]) {
     return cells
       .map((cell, i) => {
-        const padedEl = this.prepareCell(cell).padEnd(this.columnsWidthes[i]);
+        const padedEl = prepareCell(cell).padEnd(this.columnsWidthes[i]);
         return this.filterRegExp &&
           filterTokens &&
           searchTypes.includes(typeof cell) &&

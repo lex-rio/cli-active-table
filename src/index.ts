@@ -13,7 +13,7 @@ const run = async () => {
       data: list,
       primary: 'id',
       fields: ['name'],
-      title: 'list',
+      title: 'list3',
       lines: 10,
     },
     {
@@ -28,7 +28,7 @@ const run = async () => {
       primary: 'id',
       fields: ['title', 'description'],
       title:
-        'very long title 1 very long title 2 very long title 3 very long title 4 very long title 5',
+        'section #4',
     }
   ).handle();
 };
