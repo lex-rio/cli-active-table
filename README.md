@@ -10,19 +10,72 @@ To install the package, use the following command:
 
 ## Usage
 
+### Basic usage
+
 ```typescript
-await new ActiveTable({
-  data: list,
-  primary: 'id',
-  fields: ['name', 'description'],
-  title: 'list3',
-  lines: 10,
-}).handle();
+await new ActiveTable([
+  {
+    data: list,
+    primary: 'id',
+    fields: ['name', 'description'],
+    title: 'list3',
+    lines: 10,
+  },
+]).handle();
 ```
 
-you get
-
 ![Screenshot 1](./assets/screenshot_1.png)
+
+### Validation
+
+```typescript
+const result = await new ActiveTable([
+  {
+    data: list,
+    primary: 'id',
+    fields: ['name', 'description'],
+    title: 'list',
+    validate: (list, error) => {
+      if (list.length > 0) {
+        return true;
+      }
+      error.message = 'choose at least one';
+      return false;
+    },
+  },
+]).handle();
+console.log(result);
+```
+
+![Screenshot 2](./assets/screenshot_2.png)
+
+### Multiple tables
+
+```typescript
+const result = await new ActiveTable([
+  {
+    data: list,
+    primary: 'id',
+    fields: ['name', 'description'],
+    title: 'list',
+  },
+  {
+    data: list,
+    primary: 'id',
+    fields: ['name'],
+    title: 'list3',
+    lines: 10,
+  },
+  {
+    data: list2,
+    primary: 'id',
+    fields: ['title', 'description'],
+    title: 'title 5',
+  },
+]).handle();
+```
+
+![Screenshot 3](./assets/screenshot_3.png)
 
 ## Contributing
 
