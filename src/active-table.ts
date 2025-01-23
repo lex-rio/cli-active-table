@@ -18,6 +18,7 @@ type BaseOptions<T extends object, F extends keyof T> = {
   title?: string;
   lines?: number;
   height?: number;
+  validate?: (selectedList: T[], { message }: { message: string }) => boolean;
 };
 
 type Options<T extends object, F extends keyof T = keyof T> = T extends {
@@ -55,6 +56,7 @@ class Section<T extends unknown = unknown> {
   viewportPos = 0;
   #cursorPos = 0;
   #isActive = false;
+  private error = '';
   protected filterMode = false;
   protected filter = '';
   protected filterTokens: string[] = [];
@@ -85,6 +87,7 @@ class Section<T extends unknown = unknown> {
 
   set cursorPos(val) {
     const filtered = this.filtered.length;
+    this.error = '';
     this.#cursorPos = Math.max(0, Math.min(val, filtered - 1));
     if (this.#cursorPos < this.viewportPos) {
       this.viewportPos = this.#cursorPos;
@@ -94,6 +97,10 @@ class Section<T extends unknown = unknown> {
     ) {
       this.viewportPos = this.#cursorPos - Math.min(this.size.lines, filtered) + 1;
     }
+  }
+
+  setError(message: string) {
+    this.error = message;
   }
 
   render() {
@@ -159,7 +166,11 @@ class Section<T extends unknown = unknown> {
     const { leftTop, rightTop, vertical, leftBottom, rightBottom, scroll } = border;
     const verticalBorder = this.#isActive ? chalk(vertical, highlight) : vertical;
     const len = this.size.width;
-    const top = `${leftTop}${this.borderHorisontal(len, this.title)}${rightTop}`;
+
+    const title = this.error
+      ? chalk(this.error, { bgColor: 'yellow', color: 'black' })
+      : this.title;
+    const top = `${leftTop}${this.borderHorisontal(len, title)}${rightTop}`;
     const bottom = `${leftBottom}${this.borderHorisontal(
       len,
       this.renderFilter()
@@ -184,6 +195,7 @@ class ListSection<T extends object> extends Section<T> {
   private columnsWidthes: number[];
   private fields?: Options<T>['fields'];
   private filterRegExp: RegExp;
+  validate: Options<T>['validate'] = (_: unknown) => true;
   constructor({ data, ...options }: TSection<T>) {
     const fields = options.fields || (Object.keys(data[0]) as Options<T>['fields']);
     const columnsWidthes = [
@@ -209,6 +221,11 @@ class ListSection<T extends object> extends Section<T> {
         : undefined;
     this.columnsWidthes = columnsWidthes;
     this.fields ||= fields;
+    this.validate = options.validate || this.validate;
+  }
+
+  getSelected() {
+    return this.entities.filter((entity) => this.selected.has(entity[this.primary]));
   }
 
   keyActions = {
@@ -338,7 +355,8 @@ class ListSection<T extends object> extends Section<T> {
             )
           : padedEl;
       })
-      .join(columnSeparator);
+      .join(columnSeparator)
+      .padEnd(this.size.width - 1);
   }
 
   private stringMatchFilter(str: string, tokens: string[]) {
@@ -362,7 +380,7 @@ export class ActiveTable<Types extends object[]> {
   private sections: Section[] = [];
   private viewport: { columns: number; rows: number };
 
-  constructor(...sections: { [Index in keyof Types]: TSection<Types[Index]> }) {
+  constructor(sections: { [Index in keyof Types]: TSection<Types[Index]> }) {
     this.updateViewport();
     const layoutLines = 2;
 
@@ -458,6 +476,26 @@ export class ActiveTable<Types extends object[]> {
     };
   }
 
+  private getResult() {
+    const sections = this.sections.filter(
+      (section) => section instanceof ListSection
+    );
+    const result: unknown[][] = []; // fix this 'unknown' hack
+    const isInvalid = sections.some((section) => {
+      const error = { message: '' };
+      const selected = section.getSelected();
+      if (section.validate(selected, error)) {
+        result.push(selected);
+        return false;
+      }
+      section.setError(error.message);
+      this.sections.find(({ isActive }) => isActive).isActive = false;
+      section.isActive = true;
+      return true;
+    });
+    return isInvalid ? false : result;
+  }
+
   async handle() {
     this.clearScreen();
     this.render();
@@ -472,7 +510,7 @@ export class ActiveTable<Types extends object[]> {
     });
     if (process.stdin.isTTY) process.stdin.setRawMode(true);
     readline.emitKeypressEvents(process.stdin, rl);
-    const ids = await new Promise<unknown>((resolve) => {
+    const ids = await new Promise<unknown[][]>((resolve) => {
       process.stdin.on('keypress', (_: string, key: Key) => {
         const activeSection = this.activeSection;
         if (key.name === 'tab') {
@@ -491,7 +529,8 @@ export class ActiveTable<Types extends object[]> {
         } else if (key.ctrl && key.name in this.keyActions) {
           this.keyActions[key.name as keyof typeof this.keyActions]();
         } else if (key.name === 'escape') {
-          resolve(['todo']);
+          const result = this.getResult();
+          if (result) resolve(result);
         } else {
           activeSection.handleTyping(key);
         }

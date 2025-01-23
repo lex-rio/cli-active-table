@@ -2,12 +2,19 @@ import { list, list2 } from './../test-data.json';
 import { ActiveTable } from './active-table';
 
 const run = async () => {
-  await new ActiveTable(
+  const result = await new ActiveTable([
     {
       data: list,
       primary: 'id',
       fields: ['name', 'description'],
       title: 'list',
+      validate: (list, error) => {
+        if (list.length > 0) {
+          return true;
+        }
+        error.message = 'choose at least one';
+        return false;
+      },
     },
     {
       data: list,
@@ -27,10 +34,11 @@ const run = async () => {
       data: list2,
       primary: 'id',
       fields: ['title', 'description'],
-      title:
-        'section #4',
-    }
-  ).handle();
+      title: 'section #4',
+    },
+  ]).handle();
+
+  console.log(result);
 };
 
 run().catch(console.error).finally(terminate);
