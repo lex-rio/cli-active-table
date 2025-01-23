@@ -4,9 +4,11 @@
     "target": "ES2022",
     "noImplicitAny": true,
     "preserveConstEnums": true,
-    "outDir": "./build",
+    "outDir": "./dist",
     "sourceMap": true,
     "resolveJsonModule": true
+    // "strict": true
   },
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "**/*.spec.ts"]
 }
