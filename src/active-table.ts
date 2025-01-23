@@ -194,7 +194,7 @@ class ListSection<T extends object> extends Section<T> {
   private primary: keyof T;
   private columnsWidthes: number[];
   private fields?: Options<T>['fields'];
-  private filterRegExp: RegExp;
+  private filterRegExp?: RegExp;
   validate: Options<T>['validate'] = (_: unknown) => true;
   constructor({ data, ...options }: TSection<T>) {
     const fields = options.fields || (Object.keys(data[0]) as Options<T>['fields']);
