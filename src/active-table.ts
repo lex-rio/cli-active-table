@@ -197,7 +197,11 @@ class ListSection<T extends object> extends Section<T> {
   private filterRegExp?: RegExp;
   validate: Options<T>['validate'] = (_: unknown) => true;
   constructor({ data, ...options }: TSection<T>) {
-    const fields = options.fields || (Object.keys(data[0]) as Options<T>['fields']);
+    const fields =
+      options.fields ||
+      ((data?.length
+        ? Object.keys(data[0])
+        : ['provided data list is empty']) as Options<T>['fields']);
     const columnsWidthes = [
       1,
       ...fields.map((field) =>
@@ -329,12 +333,9 @@ class ListSection<T extends object> extends Section<T> {
   private renderFooter() {
     const position = `${this.cursorPos + 1}/${this.filtered.length}`;
     const selected = `Selected: ${this.selected.size}/${this.entities.length}`;
-    return chalk(
-      `${selected}${new Array(
-        this.size.width - position.length - selected.length
-      ).join(' ')}${position}`,
-      { bgColor: 'grey', color: 'black' }
-    );
+    const gapSize = Math.max(0, this.size.width - position.length - selected.length);
+    const footer = `${selected}${new Array(gapSize).join(' ')}${position}`;
+    return chalk(footer, { bgColor: 'grey', color: 'black' });
   }
 
   toggleActiveRow() {
