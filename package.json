@@ -26,6 +26,9 @@
     "url": "https://github.com/lex-rio/cli-active-table/issues"
   },
   "homepage": "https://github.com/lex-rio/cli-active-table#readme",
+  "peerDependencies": {
+    "typescript": ">=5.4.0"
+  },
   "devDependencies": {
     "@types/node": "^22.10.7",
     "tsx": "^4.19.2",
