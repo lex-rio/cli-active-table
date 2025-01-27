@@ -1,5 +1,5 @@
-import { list, list2 } from './../test-data.json';
-import { ActiveTable } from './active-table';
+import { list, list2 } from './test-data.json';
+import { ActiveTable } from './src/active-table';
 
 const run = async () => {
   const result = await new ActiveTable([
