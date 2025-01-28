@@ -77,6 +77,18 @@ const result = await new ActiveTable([
 
 ![Screenshot 3](./assets/screenshot_3.png)
 
+## Key bindings
+
+| Component    | Key         | Description         |
+| ------------ | ----------- | ------------------- |
+| Any          | `Ctrl+C`    | Exit application    |
+| Any          | `Tab`       | Rotate section      |
+| Any          | `Shift+Tab` | Back rotate section |
+| List Section | `Space`     | Select/Deselect row |
+| List Section | `Ctrl+a`    | Select/Deselect all |
+| List Section | `delete`    | Delete row          |
+| List Section | `Ctrl+f`    | Enable search mode  |
+
 ## Contributing
 
 Contributions are welcome! Please follow these steps:
