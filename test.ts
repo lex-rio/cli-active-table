@@ -21,7 +21,7 @@ const run = async () => {
       primary: 'id',
       fields: ['name'],
       title: 'list3',
-      lines: 10,
+      height: 14,
     },
     {
       data: list2,
