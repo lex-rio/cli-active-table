@@ -16,7 +16,6 @@ To install the package, use the following command:
 await new ActiveTable([
   {
     data: list,
-    primary: 'id',
     fields: ['name', 'description'],
     title: 'list3',
     lines: 10,
@@ -32,7 +31,6 @@ await new ActiveTable([
 const result = await new ActiveTable([
   {
     data: list,
-    primary: 'id',
     fields: ['name', 'description'],
     title: 'list',
     validate: (list, error) => {
@@ -55,20 +53,17 @@ console.log(result);
 const result = await new ActiveTable([
   {
     data: list,
-    primary: 'id',
     fields: ['name', 'description'],
     title: 'list',
   },
   {
     data: list,
-    primary: 'id',
     fields: ['name'],
     title: 'list3',
     lines: 10,
   },
   {
     data: list2,
-    primary: 'id',
     fields: ['title', 'description'],
     title: 'title 5',
   },

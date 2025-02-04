@@ -18,18 +18,12 @@ type Layout = {
   coords: { x: number; y: number }[];
 }[];
 
-type BaseOptions<T extends object, F extends keyof T> = {
+type Options<T extends object, F extends keyof T = keyof T> = {
   fields?: F[];
   title?: string;
   height?: number;
   validate?: (selectedList: T[], { message }: { message: string }) => boolean;
 };
-
-type Options<T extends object, F extends keyof T = keyof T> = T extends {
-  id: F;
-}
-  ? BaseOptions<T, F>
-  : BaseOptions<T, F> & { primary?: F };
 
 type TSection<T extends object> = {
   data: T[];
@@ -61,13 +55,17 @@ function detectFields(list: unknown[]) {
   return list?.length ? Object.keys(list[0]) : ['provided data list is empty'];
 }
 
-class Section<T extends unknown = unknown> {
+const logged: Record<string, string> = {};
+const log = (data: unknown) => (logged[Date.now()] = JSON.stringify(data));
+
+class Section {
   #cursorPos = 0;
   #isActive = false;
   #size: { height?: number; width?: number } = { width: 30 };
   private error = '';
   private title: string;
   private extraRowsCount: number;
+  protected contentSize: number;
   protected viewportSize: number;
   protected viewportPos = 0;
   protected filterMode = false;
@@ -75,11 +73,17 @@ class Section<T extends unknown = unknown> {
   protected filterTokens: string[] = [];
 
   keyActions: Record<string, () => unknown> = {};
-  navigation: Record<string, () => void> = {};
+  navigation = {
+    up: () => this.cursorPos--,
+    down: () => this.cursorPos++,
+    pageup: () => (this.cursorPos -= this.viewportSize),
+    pagedown: () => (this.cursorPos += this.viewportSize),
+    left: () => (this.cursorPos -= this.contentSize),
+    right: () => (this.cursorPos += this.contentSize),
+  };
 
   constructor(
     private originalTitle: string,
-    protected filtered: T[] = [],
     size: { height?: number; width?: number } = {}
   ) {
     this.size = size;
@@ -99,16 +103,17 @@ class Section<T extends unknown = unknown> {
   }
 
   set cursorPos(val) {
-    const filtered = this.filtered.length;
     this.error = '';
-    this.#cursorPos = Math.max(0, Math.min(val, filtered - 1));
+    if (val) this.filterMode = false; // if cursorPos > 0, means we were navigating, and we want to turn off filter mode
+    this.#cursorPos = Math.max(0, Math.min(val, this.contentSize - 1));
     if (this.#cursorPos < this.viewportPos) {
       this.viewportPos = this.#cursorPos;
     } else if (
-      this.#cursorPos >=
-      this.viewportPos + Math.min(this.viewportSize, filtered)
+      this.#cursorPos >
+      this.viewportPos + Math.min(this.viewportSize, this.contentSize)
     ) {
-      this.viewportPos = this.#cursorPos - Math.min(this.viewportSize, filtered) + 1;
+      this.viewportPos =
+        this.#cursorPos - Math.min(this.viewportSize, this.contentSize) + 1;
     }
   }
 
@@ -158,7 +163,7 @@ class Section<T extends unknown = unknown> {
       [this.renderHeader(), ...this.renderData(), this.renderFooter()].filter(
         Boolean
       ) as string[],
-      this.filtered.length
+      this.contentSize
     );
   }
 
@@ -263,10 +268,10 @@ class PreviewSection<T extends object> extends Section {
   }
 }
 
-class ListSection<T extends object> extends Section<T> {
+class ListSection<T extends object> extends Section {
   private entities: T[];
-  private selected: Set<T[keyof T]> = new Set();
-  private primary: keyof T;
+  private filtered: T[];
+  private selected: Set<T> = new Set();
   private columnsWidthes: number[];
   private fields?: Options<T>['fields'];
   private filterRegExp?: RegExp;
@@ -282,47 +287,32 @@ class ListSection<T extends object> extends Section<T> {
         )
       ),
     ];
-    super(options.title, data, {
+    super(options.title, {
       width: columnsWidthes.reduce((a, b) => a + b + columnSeparator.length, 0),
       height: options.height,
     });
     this.entities = data;
-    // @ToDo: get rid of primary (use indexes)
-    this.primary =
-      'primary' in options
-        ? (options.primary as keyof T)
-        : this.fields.includes('id' as keyof T)
-        ? ('id' as keyof T)
-        : undefined;
+    this.filtered = this.entities;
     this.columnsWidthes = columnsWidthes;
     this.fields ||= fields;
     this.validate = options.validate || this.validate;
   }
 
   getSelected() {
-    return this.entities.filter((entity) => this.selected.has(entity[this.primary]));
+    return [...this.selected];
   }
 
   keyActions = {
     a: () => {
-      if (this.selected.size === this.entities.length) {
+      if (this.selected.size === this.filtered.length) {
         this.selected.clear();
       } else {
-        this.filtered.forEach((entity) => this.selected.add(entity[this.primary]));
+        this.filtered.forEach((entity) => this.selected.add(entity));
       }
     },
     d: () => this.deleteRows(),
     delete: () => this.deleteRows(),
     f: () => (this.filterMode = true),
-  };
-
-  navigation = {
-    up: () => this.cursorPos--,
-    down: () => this.cursorPos++,
-    pageup: () => (this.cursorPos -= this.viewportSize),
-    pagedown: () => (this.cursorPos += this.viewportSize),
-    left: () => (this.cursorPos -= this.filtered.length),
-    right: () => (this.cursorPos += this.filtered.length),
   };
 
   filterData(filterTokens: string[] = []) {
@@ -382,19 +372,14 @@ class ListSection<T extends object> extends Section<T> {
   //delete selected or delete one under cursor
   private deleteRows() {
     if (this.selected.size) {
-      this.entities = this.entities.filter(
-        (entity) => !this.selected.has(entity[this.primary])
-      );
+      this.entities = this.entities.filter((entity) => !this.selected.has(entity));
+      this.filtered = this.filtered.filter((entity) => !this.selected.has(entity));
       this.selected.clear();
     } else {
-      const deleteId = this.filtered[this.cursorPos]?.[this.primary];
-      const index = this.entities.findIndex(
-        (entity) => entity[this.primary] === deleteId
-      );
-      this.selected.delete(deleteId);
-      this.entities.splice(index, 1);
+      const [deleted] = this.filtered.splice(this.cursorPos, 1);
+      this.entities = this.entities.filter((entity) => deleted !== entity);
     }
-    this.cursorPos = this.cursorPos;
+    this.cursorPos = this.cursorPos; // to adjust viewport position
   }
 
   protected renderHeader() {
@@ -415,8 +400,8 @@ class ListSection<T extends object> extends Section<T> {
   }
 
   toggleActiveRow() {
-    const id = this.filtered[this.cursorPos][this.primary];
-    this.selected.has(id) ? this.selected.delete(id) : this.selected.add(id);
+    const row = this.filtered[this.cursorPos];
+    this.selected.has(row) ? this.selected.delete(row) : this.selected.add(row);
   }
 
   getActiveRow() {
@@ -445,13 +430,14 @@ class ListSection<T extends object> extends Section<T> {
   }
 
   private getVisible() {
+    this.contentSize = this.filtered.length;
     const visible = this.filtered.slice(
       this.viewportPos,
       this.viewportPos + this.viewportSize
     );
     return visible.map((entity, i) => ({
       entity,
-      isSelected: this.selected.has(entity[this.primary]),
+      isSelected: this.selected.has(entity),
       isCursor: this.cursorPos - this.viewportPos === i,
     }));
   }
@@ -465,7 +451,7 @@ export class ActiveTable<Types extends object[]> {
 
   constructor(sections: { [Index in keyof Types]: TSection<Types[Index]> }) {
     this.updateViewport();
-    const layoutLines = 2;
+    const layoutLines = Math.ceil(sections.length / 2);
 
     const height = Math.floor(this.viewport.rows / layoutLines);
     this.sections = sections.map((config) => new ListSection({ height, ...config }));
