@@ -55,7 +55,7 @@ function detectFields(list: unknown[]) {
   return list?.length ? Object.keys(list[0]) : ['provided data list is empty'];
 }
 
-const logged: Record<string, string> = {};
+const logged: Record<string, unknown> = {};
 const log = (data: unknown) => (logged[Date.now()] = JSON.stringify(data));
 
 class Section {
@@ -108,12 +108,11 @@ class Section {
     this.#cursorPos = Math.max(0, Math.min(val, this.contentSize - 1));
     if (this.#cursorPos < this.viewportPos) {
       this.viewportPos = this.#cursorPos;
-    } else if (
-      this.#cursorPos >
-      this.viewportPos + Math.min(this.viewportSize, this.contentSize)
-    ) {
+    } else if (this.#cursorPos >= this.viewportPos + this.viewportSize) {
       this.viewportPos =
         this.#cursorPos - Math.min(this.viewportSize, this.contentSize) + 1;
+    } else if (this.contentSize - this.viewportPos < this.viewportSize) {
+      this.viewportPos = Math.max(this.contentSize - this.viewportSize, 0);
     }
   }
 
@@ -379,6 +378,7 @@ class ListSection<T extends object> extends Section {
       const [deleted] = this.filtered.splice(this.cursorPos, 1);
       this.entities = this.entities.filter((entity) => deleted !== entity);
     }
+    this.contentSize = this.filtered.length;
     this.cursorPos = this.cursorPos; // to adjust viewport position
   }
 
