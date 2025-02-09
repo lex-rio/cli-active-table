@@ -54,15 +54,13 @@ function detectFields(list: unknown[]) {
   return list?.length ? Object.keys(list[0]) : ['provided data list is empty'];
 }
 
-const logged: Record<string, unknown> = {};
-const log = (data: unknown) => (logged[Date.now()] = JSON.stringify(data));
-
 class Section {
   #cursorPos = 0;
   #isActive = false;
   #size: { height?: number; width?: number } = { width: 30 };
+  #originalTitle: string;
+  #renderedTitle: string;
   private error = '';
-  private title: string;
   private extraRowsCount: number;
   protected contentSize: number;
   protected viewportSize: number;
@@ -81,10 +79,8 @@ class Section {
     right: () => (this.cursorPos += this.contentSize),
   };
 
-  constructor(
-    private originalTitle: string,
-    size: { height?: number; width?: number } = {}
-  ) {
+  constructor(originalTitle = '', size: { height?: number; width?: number } = {}) {
+    this.#originalTitle = originalTitle;
     this.size = size;
   }
 
@@ -122,8 +118,17 @@ class Section {
   set size({ height, width }: { height?: number; width?: number }) {
     this.#size.height = height || this.#size.height;
     this.#size.width = width || this.#size.width;
-    this.title = this.limitString(this.#size.width, this.originalTitle);
+    this.title = this.#originalTitle;
     this.viewportSize = this.#size.height - this.getExtraRowsCount();
+  }
+
+  get title() {
+    return this.#originalTitle;
+  }
+
+  set title(title: string) {
+    this.#originalTitle = title;
+    this.#renderedTitle = this.limitString(this.#size.width, this.#originalTitle);
   }
 
   setError(message: string) {
@@ -160,7 +165,8 @@ class Section {
     try {
       const rows = this.renderData();
       const emptyRow = new Array(this.size.width).join(' ');
-      const emptyRows = new Array(this.viewportSize - rows.length).fill(emptyRow);
+      const enptyCount = this.viewportSize - rows.length;
+      const emptyRows = enptyCount > 0 ? new Array(enptyCount).fill(emptyRow) : [];
       return this.wrap(
         [this.renderHeader(), ...rows, ...emptyRows, this.renderFooter()].filter(
           Boolean
@@ -189,9 +195,9 @@ class Section {
   filterData(filterTokens: string[] = []) {}
 
   protected limitString(limit: number, string = '') {
-    return string.length >= limit
-      ? `…${string.slice(string.length + 4 - limit)}`
-      : string;
+    return string.length < limit
+      ? string
+      : `…${string.slice(string.length + 4 - limit)}`;
   }
 
   private borderHorisontal(len: number, text?: string) {
@@ -235,7 +241,7 @@ class Section {
 
     const title = this.error
       ? chalk(this.error, { bgColor: 'yellow', color: 'black' })
-      : this.title;
+      : this.#renderedTitle;
     const top = `${leftTop}${this.borderHorisontal(len, title)}${rightTop}`;
     const bottom = `${leftBottom}${this.borderHorisontal(
       len,
@@ -254,51 +260,61 @@ class Section {
   }
 }
 
-// class PreviewSection<T extends object> extends Section {
-//   data: T = {} as T;
-//   prerendered: string[];
+class PreviewSection<T extends object> extends Section {
+  data: T = {} as T;
+  prerendered: string[] = [];
 
-//   setData(object: T) {
-//     if (this.data === object) return;
-//     this.cursorPos = 0;
-//     this.data = object;
-//     this.prerenderData();
-//   }
+  keyActions = {
+    w: () => this.close(),
+  };
 
-//   protected prerenderData() {
-//     const keyColumnWidth = Math.max(
-//       ...Object.keys(this.data).map(({ length }) => length)
-//     );
-//     const valueColumnWidth = this.size.width - keyColumnWidth - 2;
-//     this.prerendered = Object.entries(this.data).reduce((acc, entry) => {
-//       acc.push(...this.renderRow(entry, [keyColumnWidth, valueColumnWidth]));
-//       return acc;
-//     }, []);
-//     this.contentSize = this.prerendered.length;
-//   }
+  setData(object: T, title: string) {
+    if (this.data === object) return;
+    this.cursorPos = 0;
+    this.data = object;
+    this.title = title;
+    this.prerenderData();
+  }
 
-//   private renderRow([key, val]: string[], [keyWidth, valWidth]: number[]) {
-//     return prepareCell(val, false)
-//       .split('\n')
-//       .map((row, j) =>
-//         Array.from(
-//           { length: Math.ceil(row.length / valWidth) },
-//           (_, i) =>
-//             `${(j === 0 && i === 0 ? key : '').padEnd(keyWidth)} ${row
-//               .slice(i * valWidth, (i + 1) * valWidth)
-//               .padEnd(valWidth)}`
-//         )
-//       )
-//       .flat();
-//   }
+  private close() {
+    this.prerendered = [];
+    this.title = '';
+  }
 
-//   protected renderData() {
-//     return this.prerendered.slice(
-//       this.viewportPos,
-//       this.viewportPos + this.viewportSize
-//     );
-//   }
-// }
+  protected prerenderData() {
+    const keyColumnWidth = Math.max(
+      ...Object.keys(this.data).map(({ length }) => length)
+    );
+    const valueColumnWidth = this.size.width - keyColumnWidth - 2;
+    this.prerendered = Object.entries(this.data).reduce((acc, entry) => {
+      acc.push(...this.renderRow(entry, [keyColumnWidth, valueColumnWidth]));
+      return acc;
+    }, []);
+    this.contentSize = this.prerendered.length;
+  }
+
+  private renderRow([key, val]: string[], [keyWidth, valWidth]: number[]) {
+    return prepareCell(val, false)
+      .split('\n')
+      .map((row, j) =>
+        Array.from(
+          { length: Math.ceil(row.length / valWidth) },
+          (_, i) =>
+            `${(j === 0 && i === 0 ? key : '').padEnd(keyWidth)} ${row
+              .slice(i * valWidth, (i + 1) * valWidth)
+              .padEnd(valWidth)}`
+        )
+      )
+      .flat();
+  }
+
+  protected renderData() {
+    return this.prerendered.slice(
+      this.viewportPos,
+      this.viewportPos + this.viewportSize
+    );
+  }
+}
 
 class ListSection<T extends object> extends Section {
   private entities: T[];
@@ -359,22 +375,27 @@ class ListSection<T extends object> extends Section {
   }
 
   protected renderData() {
-    return this.getVisible().map(({ entity, isSelected, isCursor }, i) =>
-      chalk(
-        this.renderRow(
+    return this.getVisible()
+      .map(({ entity, isSelected, isCursor }, i) => {
+        const row = this.renderRow(
           [
             isSelected ? chalk('✔', 'green') : ' ',
             ...this.fields.map((f) => entity[f]),
           ],
           this.filterTokens
-        ),
-        isCursor
-          ? { bgColor: 'blue', color: 'black' }
-          : i % 2
-          ? { bgColor: 'dark' }
-          : {}
-      )
-    );
+        );
+        return [row].map((subrow) =>
+          chalk(
+            subrow,
+            isCursor
+              ? { bgColor: 'blue', color: 'black' }
+              : i % 2
+              ? { bgColor: 'dark' }
+              : {}
+          )
+        );
+      })
+      .flat();
   }
 
   handleTyping(key: Key) {
@@ -475,7 +496,7 @@ class ListSection<T extends object> extends Section {
 export class ActiveTable<Types extends object[]> {
   private sections: Section[] = [];
   private viewport: { columns: number; rows: number };
-  // private previewSection: PreviewSection<{}>;
+  private previewSection: PreviewSection<{}>;
   private layout: Layout;
 
   constructor(sections: { [Index in keyof Types]: TSection<Types[Index]> }) {
@@ -483,12 +504,9 @@ export class ActiveTable<Types extends object[]> {
     const layoutLines = Math.ceil(sections.length / 2);
     const height = Math.floor(this.viewport.rows / layoutLines);
     this.sections = sections.map((config) => new ListSection(config, height));
-    // this.previewSection = new PreviewSection('preview');
-    // this.sections.push(this.previewSection);
+    this.previewSection = new PreviewSection();
+    this.sections.push(this.previewSection);
     this.defineLayout(this.sections);
-    // this.previewSection.setData(
-    //   (this.sections[0] as ListSection<any>).getActiveRow()
-    // );
     this.sections[0].isActive = true;
   }
 
@@ -528,32 +546,23 @@ export class ActiveTable<Types extends object[]> {
       );
       return layout;
     }, []);
-    // const previewMinWidth = 50;
-    // if (this.viewport.columns - coords.x < previewMinWidth) {
-    //   this.layout[++lineNumber] = { lineHeight: 0, coords: [] };
-    // }
-    // this.previewSection.size = {
-    //   width: this.viewport.columns - coords.x - 3,
-    //   height: this.layout[lineNumber].lineHeight,
-    // };
-    // this.layout[lineNumber].coords.push(coords);
+    const previewMinWidth = 50;
+    if (this.viewport.columns - coords.x < previewMinWidth) {
+      this.layout[++lineNumber] = { lineHeight: 0, coords: [] };
+    }
+    this.previewSection.size = {
+      width: this.viewport.columns - coords.x - 3,
+      height: this.layout[lineNumber].lineHeight,
+    };
+    this.layout[lineNumber].coords.push(coords);
   }
 
   private layoutRender(sections: Section[]) {
     const canvas: string[] = new Array(this.viewport.rows).fill('');
-
     let i = 0;
     this.layout.forEach(({ lineHeight, coords }) => {
       coords.forEach(({ y }) => {
         const rows = sections[i].render();
-        // if (lineHeight - rows.length) {
-        //   rows.push(
-        //     ...new Array(lineHeight - rows.length).fill(
-        //       new Array(sections[i].size.width + 2).join(' ')
-        //     )
-        //   );
-        // }
-
         [...rows].forEach((row, rowIndex) => {
           const canvasRowIndex = y + rowIndex;
           if (typeof canvas[canvasRowIndex] === 'undefined') return;
@@ -586,6 +595,15 @@ export class ActiveTable<Types extends object[]> {
       columns: process.stdout.columns,
       rows: process.stdout.rows - 1,
     };
+  }
+
+  private openPreview() {
+    if (this.activeSection instanceof ListSection) {
+      this.previewSection.setData(
+        this.activeSection.getActiveRow(),
+        `preview (${this.activeSection.title} > ${this.activeSection.cursorPos + 1})`
+      );
+    }
   }
 
   private getResult() {
@@ -625,27 +643,23 @@ export class ActiveTable<Types extends object[]> {
     readline.emitKeypressEvents(process.stdin, rl);
     const ids = await new Promise<unknown[][]>((resolve) => {
       process.stdin.on('keypress', (_: string, key: Key) => {
-        if (key.name === 'tab') {
+        if (key.ctrl && key.name in this.keyActions) {
+          this.keyActions[key.name as keyof typeof this.keyActions]();
+        } else if (key.name === 'return') {
+          this.openPreview();
+        } else if (key.name === 'tab') {
           this.rotateSections(key.shift);
-          // if (this.activeSection instanceof ListSection) {
-          //   this.previewSection.setData(this.activeSection.getActiveRow());
-          // }
         } else if (key.name in this.activeSection.navigation) {
           this.activeSection.navigation[
             key.name as keyof typeof this.activeSection.navigation
           ]();
-          // if (this.activeSection instanceof ListSection) {
-          //   this.previewSection.setData(this.activeSection.getActiveRow());
-          // }
         } else if (
           (key.ctrl && key.name in this.activeSection.keyActions) ||
-          key.name === 'delete'
+          ['delete'].includes(key.name)
         ) {
           this.activeSection.keyActions[
             key.name as keyof typeof this.activeSection.keyActions
           ]();
-        } else if (key.ctrl && key.name in this.keyActions) {
-          this.keyActions[key.name as keyof typeof this.keyActions]();
         } else if (key.name === 'escape') {
           const result = this.getResult();
           if (result) resolve(result);
