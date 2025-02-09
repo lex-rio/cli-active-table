@@ -18,7 +18,6 @@ await new ActiveTable([
     data: list,
     fields: ['name', 'description'],
     title: 'list3',
-    lines: 10,
   },
 ]).handle();
 ```
@@ -60,7 +59,6 @@ const result = await new ActiveTable([
     data: list,
     fields: ['name'],
     title: 'list3',
-    lines: 10,
   },
   {
     data: list2,
