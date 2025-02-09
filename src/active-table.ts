@@ -610,7 +610,7 @@ export class ActiveTable<Types extends object[]> {
     const sections = this.sections.filter(
       (section) => section instanceof ListSection
     );
-    const result: unknown[][] = []; // fix this 'unknown' hack
+    const result = [] as { [Index in keyof Types]: Types[Index][] };
     const isInvalid = sections.some((section) => {
       const error = { message: '' };
       const selected = section.getSelected();
@@ -641,34 +641,36 @@ export class ActiveTable<Types extends object[]> {
     });
     if (process.stdin.isTTY) process.stdin.setRawMode(true);
     readline.emitKeypressEvents(process.stdin, rl);
-    const ids = await new Promise<unknown[][]>((resolve) => {
-      process.stdin.on('keypress', (_: string, key: Key) => {
-        if (key.ctrl && key.name in this.keyActions) {
-          this.keyActions[key.name as keyof typeof this.keyActions]();
-        } else if (key.name === 'return') {
-          this.openPreview();
-        } else if (key.name === 'tab') {
-          this.rotateSections(key.shift);
-        } else if (key.name in this.activeSection.navigation) {
-          this.activeSection.navigation[
-            key.name as keyof typeof this.activeSection.navigation
-          ]();
-        } else if (
-          (key.ctrl && key.name in this.activeSection.keyActions) ||
-          ['delete'].includes(key.name)
-        ) {
-          this.activeSection.keyActions[
-            key.name as keyof typeof this.activeSection.keyActions
-          ]();
-        } else if (key.name === 'escape') {
-          const result = this.getResult();
-          if (result) resolve(result);
-        } else {
-          this.activeSection.handleTyping(key);
-        }
-        this.render();
-      });
-    });
+    const ids = await new Promise<{ [Index in keyof Types]: Types[Index][] }>(
+      (resolve) => {
+        process.stdin.on('keypress', (_: string, key: Key) => {
+          if (key.ctrl && key.name in this.keyActions) {
+            this.keyActions[key.name as keyof typeof this.keyActions]();
+          } else if (key.name === 'return') {
+            this.openPreview();
+          } else if (key.name === 'tab') {
+            this.rotateSections(key.shift);
+          } else if (key.name in this.activeSection.navigation) {
+            this.activeSection.navigation[
+              key.name as keyof typeof this.activeSection.navigation
+            ]();
+          } else if (
+            (key.ctrl && key.name in this.activeSection.keyActions) ||
+            ['delete'].includes(key.name)
+          ) {
+            this.activeSection.keyActions[
+              key.name as keyof typeof this.activeSection.keyActions
+            ]();
+          } else if (key.name === 'escape') {
+            const result = this.getResult();
+            if (result) resolve(result);
+          } else {
+            this.activeSection.handleTyping(key);
+          }
+          this.render();
+        });
+      }
+    );
 
     this.clearScreen();
     return ids;
