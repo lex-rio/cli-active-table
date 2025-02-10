@@ -30,13 +30,11 @@ const ANSI_RESET = '\x1b[0m';
 
 export const chalk = (
   str: string | number,
-  options:
-    | {
-        color?: keyof typeof colors;
-        bgColor?: keyof typeof bgColors;
-        style?: keyof typeof styles;
-      }
-    | keyof typeof colors = {}
+  options: {
+    color?: keyof typeof colors;
+    bgColor?: keyof typeof bgColors;
+    style?: keyof typeof styles;
+  } = {}
 ) => {
   const {
     color = 'default',

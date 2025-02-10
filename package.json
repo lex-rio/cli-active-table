@@ -1,11 +1,15 @@
 {
   "name": "cli-active-table",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "cli tool that helps you render data in command line interface",
   "main": "dist/index.js",
   "scripts": {
     "build": "rm -rf dist & tsc",
-    "start": "tsx test.ts",
+    "start": "tsx examples/test.ts",
+    "issues": "tsx examples/issues.ts",
+    "crypto": "tsx examples/crypto.ts",
+    "books": "tsx examples/books.ts",
+    "launches": "tsx examples/launches.ts",
     "prepublishOnly": "npm run build"
   },
   "repository": {
@@ -17,7 +21,7 @@
     "table"
   ],
   "bin": {
-    "cli-active-table": "dist/index.js"
+    "cli-active-table": "bin/cli.js"
   },
   "types": "dist/index.d.ts",
   "author": "lex-rio",

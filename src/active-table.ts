@@ -13,13 +13,11 @@ const searchHighlightColor = 'magenta';
 const searchTypes = ['string', 'number'];
 const columnSeparator = ' ';
 
-type Layout = {
-  lineHeight: number;
-  coords: { x: number; y: number }[];
-}[];
+type Layout = { x: number; y: number }[][];
 
 type Options<T extends object, F extends keyof T = keyof T> = {
   fields?: F[];
+  sortBy?: { key: F; direction?: 'ASC' | 'DESC' }[];
   title?: string;
   validate?: (selectedList: T[], { message }: { message: string }) => boolean;
 };
@@ -51,7 +49,11 @@ function prepareCell(cell: unknown, compact = true) {
 
 // @ToDo: define if there object different shape and throw error
 function detectFields(list: unknown[]) {
-  return list?.length ? Object.keys(list[0]) : ['provided data list is empty'];
+  return list?.length
+    ? Object.entries(list[0])
+        .filter(([_, val]) => prepareCell(val) !== 'object')
+        .map(([key]) => key)
+    : ['provided data list is empty'];
 }
 
 class Section {
@@ -174,7 +176,7 @@ class Section {
         this.contentSize
       );
     } catch (e) {
-      return [e.message, ...e.stack.split('\n')];
+      return [e.message, ...e.stack.split('\n')] as string[];
     }
   }
 
@@ -237,6 +239,7 @@ class Section {
     const scrollEnd = scrollStart + scrollSize;
     const { leftTop, rightTop, vertical, leftBottom, rightBottom, scroll } = border;
     const verticalBorder = this.#isActive ? chalk(vertical, highlight) : vertical;
+    const scrollBorder = this.#isActive ? chalk(scroll, highlight) : scroll;
     const len = this.size.width;
 
     const title = this.error
@@ -252,7 +255,7 @@ class Section {
       ...rows.map(
         (row, i) =>
           `${verticalBorder}${row}${
-            i >= scrollStart && i < scrollEnd ? scroll : verticalBorder
+            i >= scrollStart && i < scrollEnd ? scrollBorder : verticalBorder
           }`
       ),
       `${this.#isActive ? chalk(bottom, highlight) : bottom}`,
@@ -340,9 +343,16 @@ class ListSection<T extends object> extends Section {
       height,
     });
     this.entities = data;
-    this.filtered = this.entities;
+    this.filtered = options.sortBy
+      ? this.entities.sort((a, b) => {
+          for (const { key, direction } of options.sortBy) {
+            return a[key] < b[key] && direction === 'DESC' ? 1 : -1;
+          }
+          return 0;
+        })
+      : this.entities;
     this.columnsWidthes = columnsWidthes;
-    this.fields ||= fields;
+    this.fields = fields;
     this.validate = options.validate || this.validate;
   }
 
@@ -375,27 +385,20 @@ class ListSection<T extends object> extends Section {
   }
 
   protected renderData() {
-    return this.getVisible()
-      .map(({ entity, isSelected, isCursor }, i) => {
-        const row = this.renderRow(
-          [
-            isSelected ? chalk('✔', 'green') : ' ',
-            ...this.fields.map((f) => entity[f]),
-          ],
-          this.filterTokens
-        );
-        return [row].map((subrow) =>
-          chalk(
-            subrow,
-            isCursor
-              ? { bgColor: 'blue', color: 'black' }
-              : i % 2
-              ? { bgColor: 'dark' }
-              : {}
-          )
-        );
-      })
-      .flat();
+    return this.getVisible().map(({ entity, isSelected, isCursor }, i) =>
+      this.renderRow(
+        [
+          isSelected ? chalk('✔', { color: 'green' }) : ' ',
+          ...this.fields.map((f) => entity[f]),
+        ],
+        isCursor
+          ? { bgColor: 'blue', color: 'black' }
+          : i % 2
+          ? { bgColor: 'dark' }
+          : {},
+        this.filterTokens
+      )
+    );
   }
 
   handleTyping(key: Key) {
@@ -434,9 +437,7 @@ class ListSection<T extends object> extends Section {
 
   protected renderHeader() {
     return this.fields
-      ? chalk(this.renderRow(['', ...(this.fields as string[])]), {
-          style: 'inverted',
-        })
+      ? this.renderRow(['', ...(this.fields as string[])], { style: 'inverted' })
       : ' '; // we need this to calculate proper viewport
   }
 
@@ -458,21 +459,28 @@ class ListSection<T extends object> extends Section {
     return this.filtered[this.cursorPos];
   }
 
-  private renderRow(cells: (string | T[keyof T])[], filterTokens?: string[]) {
-    return cells
-      .map((cell, i) => {
-        const padedEl = prepareCell(cell).padEnd(this.columnsWidthes[i]);
-        return this.filterRegExp &&
-          filterTokens &&
-          searchTypes.includes(typeof cell) &&
-          this.stringMatchFilter(padedEl, filterTokens)
-          ? padedEl.replace(this.filterRegExp, (s) =>
-              chalk(s, { color: searchHighlightColor })
-            )
-          : padedEl;
-      })
-      .join(columnSeparator)
-      .padEnd(this.size.width - 1);
+  private renderRow(
+    cells: (string | T[keyof T])[],
+    style: Parameters<typeof chalk>[1] = {},
+    filterTokens?: string[]
+  ) {
+    return chalk(
+      cells
+        .map((cell, i) => {
+          const padedEl = prepareCell(cell).padEnd(this.columnsWidthes[i]);
+          return this.filterRegExp &&
+            filterTokens &&
+            searchTypes.includes(typeof cell) &&
+            this.stringMatchFilter(padedEl, filterTokens)
+            ? padedEl.replace(this.filterRegExp, (s) =>
+                chalk(s, { ...style, color: searchHighlightColor })
+              )
+            : padedEl;
+        })
+        .join(columnSeparator)
+        .padEnd(this.size.width - 1),
+      style
+    );
   }
 
   private stringMatchFilter(str: string, tokens: string[]) {
@@ -505,7 +513,16 @@ export class ActiveTable<Types extends object[]> {
     const height = Math.floor(this.viewport.rows / layoutLines);
     this.sections = sections.map((config) => new ListSection(config, height));
     this.previewSection = new PreviewSection();
-    this.sections.push(this.previewSection);
+    if (
+      this.sections.length > 1 ||
+      this.viewport.columns - this.sections[0].size.width > 50
+    ) {
+      this.previewSection.size = {
+        height,
+        width: this.viewport.columns - this.sections[0].size.width - 3,
+      };
+      this.sections.push(this.previewSection);
+    }
     this.defineLayout(this.sections);
     this.sections[0].isActive = true;
   }
@@ -529,38 +546,26 @@ export class ActiveTable<Types extends object[]> {
 
   private defineLayout(sections: Section[]) {
     let lineNumber = 0;
+    let lineHeight = 0;
     const coords = { x: 0, y: 0 };
     this.layout = sections.reduce<Layout>((layout, section, i) => {
-      if (!(section instanceof ListSection)) return layout;
-      layout[lineNumber] ||= { lineHeight: 0, coords: [] };
+      layout[lineNumber] ||= [];
       if (coords.x + section.size.width + 3 > this.viewport.columns) {
         coords.x = 0;
-        coords.y += layout[lineNumber].lineHeight;
-        layout[++lineNumber] = { lineHeight: 0, coords: [] };
+        coords.y += lineHeight;
+        layout[++lineNumber] = [];
       }
-      layout[lineNumber].coords.push({ ...coords });
+      layout[lineNumber].push({ ...coords });
       coords.x += section.size.width;
-      layout[lineNumber].lineHeight = Math.max(
-        layout[lineNumber].lineHeight,
-        sections[i].size.height
-      );
+      lineHeight = Math.max(lineHeight, sections[i].size.height);
       return layout;
     }, []);
-    const previewMinWidth = 50;
-    if (this.viewport.columns - coords.x < previewMinWidth) {
-      this.layout[++lineNumber] = { lineHeight: 0, coords: [] };
-    }
-    this.previewSection.size = {
-      width: this.viewport.columns - coords.x - 3,
-      height: this.layout[lineNumber].lineHeight,
-    };
-    this.layout[lineNumber].coords.push(coords);
   }
 
   private layoutRender(sections: Section[]) {
     const canvas: string[] = new Array(this.viewport.rows).fill('');
     let i = 0;
-    this.layout.forEach(({ lineHeight, coords }) => {
+    this.layout.forEach((coords) => {
       coords.forEach(({ y }) => {
         const rows = sections[i].render();
         [...rows].forEach((row, rowIndex) => {

@@ -1,5 +1,5 @@
 import { list, list2 } from './test-data.json';
-import { ActiveTable } from './src/active-table';
+import { ActiveTable } from '../src/active-table';
 
 const run = async () => {
   const result = await new ActiveTable([
@@ -16,9 +16,8 @@ const run = async () => {
     },
     {
       data: list2,
-      fields: ['title', 'description'],
-      title:
-        'very long title 1 very long title 2 very long title 3 very long title 4 very long title 5',
+      fields: ['title', 'id'],
+      title: 'list2',
     },
   ]).handle();
 

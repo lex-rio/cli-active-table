@@ -1,6 +1,6 @@
+assets/
+examples/
 src/
 tsconfig.json
 .gitignore
-assets/
 .vscode
-test-data.json
