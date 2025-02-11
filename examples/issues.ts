@@ -4,6 +4,9 @@ const url = 'https://api.github.com/repos/lex-rio/cli-active-table/issues?state=
 
 const run = async () => {
   const response = await fetch(url);
+  if (response.status !== 200) {
+    return void console.log(await response.json());
+  }
   console.log(
     await new ActiveTable([
       {

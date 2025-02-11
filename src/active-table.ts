@@ -53,7 +53,9 @@ function prepareCell(cell: unknown, compact = true) {
   if (cell && cellType === 'object') {
     return compact ? cellType : JSON.stringify(cell, null, 2).normalize('NFC');
   }
-  return limitString(36, `${cell}`.normalize('NFC'));
+  return compact
+    ? limitString(50, `${cell}`.normalize('NFC'))
+    : `${cell}`.normalize('NFC');
 }
 
 function detectFields(list: unknown[]) {
