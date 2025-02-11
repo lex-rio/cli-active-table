@@ -1,3 +1,5 @@
+[![Downloads](https://badgen.net/npm/dt/cli-active-table)](https://www.npmjs.com/package/cli-active-table)
+
 # cli-active-table
 
 A lightweight JavaScript utility for rendering data in command line interface.
@@ -6,7 +8,9 @@ A lightweight JavaScript utility for rendering data in command line interface.
 
 To install the package, use the following command:
 
-`TBD`
+```bash
+npm i cli-active-table
+```
 
 ## Usage
 

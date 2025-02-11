@@ -235,7 +235,7 @@ class Section {
 
   private wrap(rows: string[], totalRowsNum?: number) {
     totalRowsNum ||= rows.length;
-    const highlight = { style: 'bold' } as const;
+    const highlight = { style: 'bold', color: 'blue' } as const;
     const scrollSize = Math.ceil((rows.length * rows.length) / totalRowsNum);
     const scrollStart = Math.floor((this.viewportPos / totalRowsNum) * rows.length);
     const scrollEnd = scrollStart + scrollSize;

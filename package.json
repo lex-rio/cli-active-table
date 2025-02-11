@@ -5,11 +5,11 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "rm -rf dist & tsc",
-    "start": "tsx examples/test.ts",
-    "issues": "tsx examples/issues.ts",
-    "crypto": "tsx examples/crypto.ts",
-    "books": "tsx examples/books.ts",
-    "launches": "tsx examples/launches.ts",
+    "example": "tsx examples/test.ts",
+    "examples:issues": "tsx examples/issues.ts",
+    "examples:crypto": "tsx examples/crypto.ts",
+    "examples:books": "tsx examples/books.ts",
+    "examples:launches": "tsx examples/launches.ts",
     "prepublishOnly": "npm run build"
   },
   "repository": {
