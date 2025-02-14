@@ -1,5 +1,19 @@
 import * as readline from 'node:readline';
-import { chalk } from './tools';
+import { chalk, detectFields, limitString, monoString, prepareCell } from './utils';
+
+const searchHighlightColor = 'magenta';
+const searchTypes = ['string', 'number'];
+const columnSeparator = ' ';
+const checkbox = '✔';
+const border = {
+  vertical: '│',
+  horisontal: '─',
+  leftTop: '╭',
+  rightTop: '╮',
+  leftBottom: '╰',
+  rightBottom: '╯',
+  scroll: '▓',
+};
 
 type Key = {
   sequence: string;
@@ -8,10 +22,6 @@ type Key = {
   meta: boolean;
   shift: boolean;
 };
-
-const searchHighlightColor = 'magenta';
-const searchTypes = ['string', 'number'];
-const columnSeparator = ' ';
 
 type Size = { height?: number; width?: number };
 
@@ -27,49 +37,11 @@ type TSection<T extends object> = {
   data: T[];
 } & Options<T>;
 
-const border = {
-  vertical: '│',
-  horisontal: '─',
-  leftTop: '╭',
-  rightTop: '╮',
-  leftBottom: '╰',
-  rightBottom: '╯',
-  scroll: '▓',
-};
-
-const checkbox = '✔';
-
-function limitString(limit: number, string = '') {
-  return string.length < limit
-    ? string
-    : `…${string.slice(string.length + 4 - limit)}`;
-}
-
-function prepareCell(cell: unknown, compact = true) {
-  if (cell instanceof Date) {
-    return cell.toISOString();
-  }
-  const cellType = typeof cell;
-  if (cell && cellType === 'object') {
-    return compact ? cellType : JSON.stringify(cell, null, 2).normalize('NFC');
-  }
-  return compact
-    ? limitString(50, `${cell}`.normalize('NFC'))
-    : `${cell}`.normalize('NFC');
-}
-
-function detectFields(list: unknown[]) {
-  return list?.length
-    ? Object.entries(list[0])
-        .filter(([_, val]) => prepareCell(val) !== 'object')
-        .map(([key]) => key)
-    : ['provided data list is empty'];
-}
-
 class Section {
   #cursorPos = 0;
   #isActive = false;
-  #size: Size = { width: 30 };
+  #size: Size = {};
+  #coords = { x: 0, y: 0 };
   #originalTitle: string;
   #renderedTitle: string;
   private error = '';
@@ -96,6 +68,15 @@ class Section {
     this.size = size;
   }
 
+  get coords() {
+    return this.#coords;
+  }
+
+  set coords({ x, y }: { x?: number; y?: number }) {
+    this.#coords.x = x ?? this.#coords.x;
+    this.#coords.y = y ?? this.#coords.y;
+  }
+
   get isActive() {
     return this.#isActive;
   }
@@ -110,6 +91,7 @@ class Section {
   }
 
   set cursorPos(val) {
+    if (this.#cursorPos === val) return;
     this.error = '';
     if (val) this.filterMode = false; // if cursorPos > 0, means we were navigating, and we want to turn off filter mode
     this.#cursorPos = Math.max(0, Math.min(val, this.contentSize - 1));
@@ -121,6 +103,7 @@ class Section {
     } else if (this.contentSize - this.viewportPos < this.viewportSize) {
       this.viewportPos = Math.max(this.contentSize - this.viewportSize, 0);
     }
+    // debugSection.setData({ viewportPos: this.viewportPos });
   }
 
   get size() {
@@ -128,10 +111,18 @@ class Section {
   }
 
   set size({ height, width }: Size) {
-    this.#size.height = height || this.#size.height;
-    this.#size.width = width || this.#size.width;
+    this.#size.height = height ?? this.#size.height;
+    this.#size.width = width ?? this.#size.width;
     this.title = this.#originalTitle;
     this.viewportSize = this.#size.height - this.getExtraRowsCount();
+  }
+
+  innerSize() {
+    const borders = border.vertical.length * 2;
+    return {
+      height: this.#size.height - borders,
+      width: this.#size.width - borders,
+    };
   }
 
   get title() {
@@ -171,23 +162,26 @@ class Section {
   }
 
   render() {
-    if (!this.size.height || !this.size.width) {
-      return this.wrap(['Size not set']);
-    }
+    let data: string[] = [];
     try {
       const rows = this.renderData();
-      const emptyRow = new Array(this.size.width).join(' ');
+      const emptyRow = monoString(' ', this.innerSize().width);
       const enptyCount = this.viewportSize - rows.length;
       const emptyRows = enptyCount > 0 ? new Array(enptyCount).fill(emptyRow) : [];
-      return this.wrap(
+      data = this.wrap(
         [this.renderHeader(), ...rows, ...emptyRows, this.renderFooter()].filter(
           Boolean
         ) as string[],
         this.contentSize
       );
     } catch (e) {
-      return [e.message, ...e.stack.split('\n')] as string[];
+      data = [e.message, ...e.stack.split('\n')] as string[];
     }
+    const { x, y } = this.coords;
+    data.forEach((row, i) => {
+      readline.cursorTo(process.stdout, x, y + i);
+      process.stdout.write(row);
+    });
   }
 
   handleTyping(key: Key) {
@@ -208,16 +202,14 @@ class Section {
 
   private borderHorisontal(len: number, text?: string) {
     if (!text) {
-      return new Array(len).join(border.horisontal);
+      return monoString(border.horisontal, len);
     }
-    const textLen = text.replace(/\x1b\[[0-9;]*m/g, '').length;
-
-    const borderChunk = new Array(Math.floor((len - textLen - 1) / 2)).join(
-      border.horisontal
-    );
+    const extraLen = 2; // spaces
+    const textLen = text.replace(/\x1b\[[0-9;]*m/g, '').length + extraLen;
+    const chunkLen = Math.floor((len - textLen) / 2);
+    const borderChunk = monoString(border.horisontal, chunkLen);
     let borderLine = `${borderChunk} ${text} ${borderChunk}`;
-    borderLine +=
-      len > borderChunk.length * 2 + textLen + 3 ? border.horisontal : '';
+    borderLine += len > borderChunk.length * 2 + textLen ? border.horisontal : '';
     return borderLine;
   }
 
@@ -244,7 +236,7 @@ class Section {
     const { leftTop, rightTop, vertical, leftBottom, rightBottom, scroll } = border;
     const verticalBorder = this.#isActive ? chalk(vertical, highlight) : vertical;
     const scrollBorder = this.#isActive ? chalk(scroll, highlight) : scroll;
-    const len = this.size.width;
+    const len = this.innerSize().width;
 
     const title = this.error
       ? chalk(this.error, { bgColor: 'yellow', color: 'black' })
@@ -267,32 +259,22 @@ class Section {
   }
 }
 
-class PreviewSection<T extends object> extends Section {
+class PopupSection<T extends object> extends Section {
   data: T = {} as T;
   prerendered: string[] = [];
 
-  keyActions = {
-    w: () => this.close(),
-  };
-
-  setData(object: T, title: string) {
-    if (this.data === object) return;
+  setData(object: T, title?: string) {
     this.cursorPos = 0;
     this.data = object;
-    this.title = title;
+    if (title) this.title = title;
     this.prerenderData();
-  }
-
-  private close() {
-    this.prerendered = [];
-    this.title = '';
   }
 
   protected prerenderData() {
     const keyColumnWidth = Math.max(
       ...Object.keys(this.data).map(({ length }) => length)
     );
-    const valueColumnWidth = this.size.width - keyColumnWidth - 2;
+    const valueColumnWidth = this.innerSize().width - keyColumnWidth - 1;
     this.prerendered = Object.entries(this.data).reduce((acc, entry) => {
       acc.push(...this.renderRow(entry, [keyColumnWidth, valueColumnWidth]));
       return acc;
@@ -352,16 +334,16 @@ class ListSection<T extends object> extends Section {
   }
 
   keyActions = {
-    a: () => {
+    'ctrl-a': () => {
       if (this.selected.size === this.filtered.length) {
         this.selected.clear();
       } else {
         this.filtered.forEach((entity) => this.selected.add(entity));
       }
     },
-    d: () => this.deleteRows(),
+    'ctrl-d': () => this.deleteRows(),
     delete: () => this.deleteRows(),
-    f: () => (this.filterMode = true),
+    'ctrl-f': () => (this.filterMode = true),
   };
 
   filterData(filterTokens: string[] = []) {
@@ -434,10 +416,12 @@ class ListSection<T extends object> extends Section {
 
   protected renderFooter() {
     if (!this.selected) return ' '; // we need this to calculate proper viewport
+    const width = this.innerSize().width;
     const position = `${this.cursorPos + 1}/${this.filtered.length}`;
     const selected = `Selected: ${this.selected.size}/${this.entities.length}`;
-    const gapSize = Math.max(0, this.size.width - position.length - selected.length);
-    const footer = `${selected}${new Array(gapSize).join(' ')}${position}`;
+    const gapSize = Math.max(0, width - position.length - selected.length);
+    monoString(' ', gapSize);
+    const footer = `${selected}${monoString(' ', gapSize)}${position}`;
     return chalk(footer, { bgColor: 'grey', color: 'black' });
   }
 
@@ -469,7 +453,7 @@ class ListSection<T extends object> extends Section {
             : padedEl;
         })
         .join(columnSeparator)
-        .padEnd(this.size.width - 1),
+        .padEnd(this.innerSize().width),
       style
     );
   }
@@ -495,21 +479,17 @@ class ListSection<T extends object> extends Section {
 export class ActiveTable<Types extends object[]> {
   private sections: Section[] = [];
   private viewport: { columns: number; rows: number };
-  private previewSection: PreviewSection<{}>;
-  private layout: Section[][];
+  private previewSection: PopupSection<{}>;
+  private returnData: { [Index in keyof Types]: Types[Index][] };
 
   constructor(sections: { [Index in keyof Types]: TSection<Types[Index]> }) {
     this.updateViewport();
-    // const layoutLines = Math.ceil((sections.length + 1) / 2);
-    // const height = Math.floor(this.viewport.rows / layoutLines);
     this.sections = sections.map(
       (config) => new ListSection({ ...config, ...this.detectTableLayout(config) })
     );
-    this.previewSection = new PreviewSection();
-    this.previewSection.size = { width: 50 };
-    this.sections.push(this.previewSection);
-    this.defineLayout(this.sections);
     this.sections[0].isActive = true;
+    this.previewSection = new PopupSection();
+    this.previewSection.size = { width: 50 };
   }
 
   private detectTableLayout(config: TSection<object>) {
@@ -525,7 +505,10 @@ export class ActiveTable<Types extends object[]> {
     ];
     const separatorLen = columnSeparator.length;
     while (true) {
-      const width = columnsWidthes.reduce((a, b) => a + b + separatorLen, 0);
+      const width =
+        columnsWidthes.reduce((a, b) => a + b, 0) +
+        separatorLen * (columnsWidthes.length - 1) +
+        border.vertical.length * 2;
       if (width < this.viewport.columns) {
         return { fields, columnsWidthes, width };
       }
@@ -535,118 +518,145 @@ export class ActiveTable<Types extends object[]> {
   }
 
   private keyActions = {
-    c: () => process.exit(0),
+    'ctrl-c': () => this.getResult(),
+    tab: () => this.rotateSections(),
+    'shift-tab': () => this.rotateSections(true),
+    escape: () =>
+      this.activeSection instanceof PopupSection
+        ? this.openPreview()
+        : this.getResult(),
+    return: () => this.openPreview(),
   };
-
-  private clearScreen() {
-    process.stdout.write('\u001b[2J\u001b[0;0H');
-  }
 
   private clear() {
     process.stdout.write('\u001b[H\u001b[J');
   }
 
-  private render() {
+  private hideCursor() {
+    process.stdout.write('\u001b[?25l');
+  }
+
+  private returnCursor() {
+    process.stdout.write('\u001b[?25h');
+  }
+
+  private renderAll() {
     this.clear();
-    this.layoutRender();
+    this.sections.forEach(
+      (section) => section instanceof ListSection && section.render()
+    );
   }
 
   private defineLayout(sections: Section[]) {
-    let lineNumber = 0;
-    let lineWidth = 0;
-    this.layout = sections.reduce((layout, section) => {
-      layout[lineNumber] ||= [];
-      if (lineWidth + section.size.width + 3 > this.viewport.columns) {
-        lineWidth = 0;
-        layout[++lineNumber] = [];
-      }
-      layout[lineNumber].push(section);
-      if (section instanceof PreviewSection) {
-        section.size = {
-          width: this.viewport.columns - lineWidth - layout[lineNumber].length,
+    sections.forEach((section, i) => {
+      if (i === 0) return;
+      const previousSection = sections[i - 1];
+      section.coords = {
+        x: previousSection.coords.x + previousSection.size.width,
+        y: previousSection.coords.y,
+      };
+      if (section.coords.x + section.size.width + 3 > this.viewport.columns) {
+        section.coords = {
+          x: 0,
+          y: previousSection.coords.y + 1,
         };
       }
-      lineWidth += section.size.width;
-      return layout;
-    }, []);
-  }
-
-  private layoutRender() {
-    const canvas: string[] = new Array(this.viewport.rows).fill('');
-    const height = Math.floor(this.viewport.rows / this.layout.length);
-    this.layout.forEach((line, lineNumber) => {
-      line.forEach((section) => {
-        section.size = { height };
-        section.render().forEach((row, rowIndex) => {
-          const canvasRowIndex = height * lineNumber + rowIndex;
-          if (typeof canvas[canvasRowIndex] === 'undefined') return;
-          canvas[canvasRowIndex] = canvas[canvasRowIndex] + row;
-        });
-      });
     });
-    console.log(canvas.join('\n'));
+    const padding = 5;
+    this.previewSection.size = {
+      width: this.viewport.columns - padding * 2,
+      height: this.viewport.rows - padding * 2,
+    };
+    this.previewSection.coords = { x: padding, y: padding };
+
+    const lines = sections[sections.length - 1].coords.y + 1;
+    const height = Math.floor(this.viewport.rows / lines);
+    sections.forEach((section) => {
+      section.size = { height };
+      section.coords = { y: section.coords.y * height };
+    });
   }
 
   private rotateSections(backward = false) {
-    const current = this.sections.findIndex(({ isActive }) => isActive);
-    if (current !== -1) {
-      this.sections[current].isActive = false;
-    }
+    const current = Math.max(
+      0,
+      this.sections.findIndex(({ isActive }) => isActive)
+    );
+    this.sections[current].isActive = false;
     const delta = backward ? -1 : 1;
     const next =
       this.sections[current + delta] ||
       this.sections[backward ? this.sections.length - 1 : 0];
     next.isActive = true;
+    next.render();
   }
 
   private get activeSection() {
-    return this.sections.find(({ isActive }) => isActive) || this.sections[0];
+    return this.previewSection.isActive
+      ? this.previewSection
+      : this.sections.find(({ isActive }) => isActive) || this.sections[0];
   }
 
   private updateViewport() {
     this.viewport = {
       columns: process.stdout.columns,
-      rows: process.stdout.rows - 1,
+      rows: process.stdout.rows,
     };
   }
 
   private openPreview() {
-    if (this.activeSection instanceof ListSection) {
-      this.previewSection.setData(
-        this.activeSection.getActiveRow(),
-        `preview (${this.activeSection.title} > ${this.activeSection.cursorPos + 1})`
-      );
+    if (!(this.activeSection instanceof ListSection)) {
+      this.previewSection.isActive = false;
+      this.sections.filter((section) => section !== this.previewSection);
+      return this.renderAll();
     }
+    const object = this.activeSection.getActiveRow();
+    const title = `preview (${this.activeSection.title} > ${
+      this.activeSection.cursorPos + 1
+    })`;
+    this.previewSection.isActive = true;
+    this.previewSection.setData(object, title);
   }
 
   private getResult() {
-    const sections = this.sections.filter(
-      (section) => section instanceof ListSection
-    );
     const result = [] as { [Index in keyof Types]: Types[Index][] };
-    const isInvalid = sections.some((section) => {
-      const error = { message: '' };
-      const selected = section.getSelected();
-      if (section.validate(selected, error)) {
-        result.push(selected);
-        return false;
-      }
-      section.setError(error.message);
-      this.sections.find(({ isActive }) => isActive).isActive = false;
-      section.isActive = true;
-      return true;
-    });
-    return isInvalid ? false : result;
+    const isInvalid = this.sections
+      .filter((section) => section instanceof ListSection)
+      .some((section) => {
+        const error = { message: '' };
+        const selected = section.getSelected();
+        if (section.validate(selected, error)) {
+          result.push(selected);
+          return false;
+        }
+        section.setError(error.message);
+        if (!section.isActive) {
+          const previousActive = this.activeSection;
+          section.isActive = true;
+          previousActive.isActive = false;
+        }
+        section.render();
+        return true;
+      });
+    if (!isInvalid) this.returnData = result;
+  }
+
+  private initScreen() {
+    this.updateViewport();
+    this.defineLayout(this.sections);
+    this.renderAll();
+  }
+
+  private getHotKeyCode(key: Key) {
+    return [key.ctrl && 'ctrl', key.shift && 'shift', key.name]
+      .filter(Boolean)
+      .join('-');
   }
 
   async handle() {
-    this.clearScreen();
-    this.render();
-    process.stdout.on('resize', () => {
-      this.updateViewport();
-      this.defineLayout(this.sections);
-      this.render();
-    });
+    this.hideCursor();
+    this.initScreen();
+    process.stdout.on('resize', () => this.initScreen());
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -657,35 +667,34 @@ export class ActiveTable<Types extends object[]> {
     const ids = await new Promise<{ [Index in keyof Types]: Types[Index][] }>(
       (resolve) => {
         process.stdin.on('keypress', (_: string, key: Key) => {
-          if (key.ctrl && key.name in this.keyActions) {
-            this.keyActions[key.name as keyof typeof this.keyActions]();
-          } else if (key.name === 'return') {
-            this.openPreview();
-          } else if (key.name === 'tab') {
-            this.rotateSections(key.shift);
-          } else if (key.name in this.activeSection.navigation) {
+          const hotkey = this.getHotKeyCode(key);
+          if (hotkey in this.activeSection.navigation) {
             this.activeSection.navigation[
-              key.name as keyof typeof this.activeSection.navigation
+              hotkey as keyof typeof this.activeSection.navigation
             ]();
-          } else if (
-            (key.ctrl && key.name in this.activeSection.keyActions) ||
-            ['delete'].includes(key.name)
-          ) {
+          } else if (hotkey in this.activeSection.keyActions) {
             this.activeSection.keyActions[
-              key.name as keyof typeof this.activeSection.keyActions
+              hotkey as keyof typeof this.activeSection.keyActions
             ]();
-          } else if (key.name === 'escape') {
-            const result = this.getResult();
-            if (result) resolve(result);
+          } else if (hotkey in this.keyActions) {
+            this.keyActions[hotkey as keyof typeof this.keyActions]();
           } else {
             this.activeSection.handleTyping(key);
           }
-          this.render();
+          if (this.returnData) {
+            resolve(this.returnData);
+          }
+          this.activeSection.render();
+          // debugSection.render();
         });
       }
     );
 
-    this.clearScreen();
+    this.clear();
+    this.returnCursor();
     return ids;
   }
 }
+
+// const debugSection = new PopupSection('debug', { height: 20, width: 20 });
+// debugSection.coords = { x: 0, y: 0 };

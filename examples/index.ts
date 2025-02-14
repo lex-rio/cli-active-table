@@ -1,16 +1,14 @@
 import { ActiveTable } from '../src/active-table';
-
-const url = 'https://openlibrary.org/search.json?q=1984';
+import { scripts } from '../package.json';
 
 const run = async () => {
-  const response = await fetch(url);
-  const data = (await response.json()).docs;
   console.log(
     await new ActiveTable([
       {
-        data,
-        // fields: ['title', 'first_publish_year'],
-        title: 'books',
+        data: Object.entries(scripts)
+          .map(([name, command]) => ({ name, command }))
+          .filter(({ name }) => name.startsWith('examples:')),
+        title: 'examples',
       },
     ]).handle()
   );

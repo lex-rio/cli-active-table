@@ -1,11 +1,12 @@
 {
   "name": "cli-active-table",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "cli tool that helps you render data in command line interface",
   "main": "dist/index.js",
   "scripts": {
     "build": "rm -rf dist & tsc",
-    "example": "tsx examples/test.ts",
+    "start": "tsx examples/index.ts",
+    "examples:multiple": "tsx examples/multiple.ts",
     "examples:issues": "tsx examples/issues.ts",
     "examples:crypto": "tsx examples/crypto.ts",
     "examples:books": "tsx examples/books.ts",
