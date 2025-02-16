@@ -1,6 +1,6 @@
-![npm](https://img.shields.io/npm/v/cli-active-table)
+[![npm](https://img.shields.io/npm/v/cli-active-table)](https://www.npmjs.com/package/cli-active-table)
 ![license](https://img.shields.io/github/license/lex-rio/cli-active-table)
-![downloads](https://img.shields.io/npm/dt/cli-active-table)
+[![downloads](https://img.shields.io/npm/dt/cli-active-table)](https://www.npmjs.com/package/cli-active-table)
 
 # cli-active-table
 
