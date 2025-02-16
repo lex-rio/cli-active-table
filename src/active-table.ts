@@ -3,7 +3,7 @@ import { Key, UserIO } from './io';
 
 let io: UserIO;
 const searchHighlightColor = 'magenta';
-const searchTypes = ['string', 'number'];
+const searchTypes = ['string', 'number', 'object'];
 const columnSeparator = ' ';
 const checkbox = '✔';
 const border = {
@@ -38,14 +38,15 @@ class Section {
   #originalTitle: string;
   #renderedTitle: string;
   #prerender: string[] = [];
+  #filter = '';
   private error = '';
   private extraRowsCount: number;
   protected contentSize: number;
   protected viewportSize: number;
   protected viewportPos = 0;
   protected filterMode = false;
-  protected filter = '';
   protected filterTokens: string[] = [];
+  protected filterRegExp?: RegExp;
 
   keyActions: Record<string, () => unknown> = {};
   navigation = {
@@ -84,6 +85,20 @@ class Section {
   ) {
     this.#originalTitle = originalTitle;
     this.size = size;
+  }
+
+  get filter() {
+    return this.#filter;
+  }
+
+  set filter(filter: string) {
+    this.#filter = filter;
+    this.filterTokens =
+      filter
+        .match(/"([^"]+)"|\S+/g)
+        ?.map((token) => token.replace(/(^"|"$)/g, '')) || [];
+    this.filterRegExp =
+      this.filterTokens.length && new RegExp(this.filterTokens.join('|'), 'gi');
   }
 
   get coords() {
@@ -207,24 +222,19 @@ class Section {
     } else {
       this.filter += key.sequence.toLowerCase();
     }
-    this.filterTokens =
-      this.filter
-        .match(/"([^"]+)"|\S+/g)
-        ?.map((token) => token.replace(/(^"|"$)/g, '')) || [];
-    this.filterData(this.filterTokens);
+    this.filterData();
   }
 
-  filterData(filterTokens: string[] = []) {}
+  filterData() {}
 
   private borderHorisontal(len: number, text?: string) {
     if (!text) {
       return monoString(border.horisontal, len);
     }
-    const extraLen = 2; // spaces
-    const textLen = text.replace(/\x1b\[[0-9;]*m/g, '').length + extraLen;
+    const textLen = text.replace(/\x1b\[[0-9;]*m/g, '').length;
     const chunkLen = Math.floor((len - textLen) / 2);
     const borderChunk = monoString(border.horisontal, chunkLen);
-    let borderLine = `${borderChunk} ${text} ${borderChunk}`;
+    let borderLine = `${borderChunk}${text}${borderChunk}`;
     borderLine += len > borderChunk.length * 2 + textLen ? border.horisontal : '';
     return borderLine;
   }
@@ -283,10 +293,10 @@ class PopupSection<T extends object> extends Section {
     super('', {}, 'viewport');
   }
 
-  setData(object: T, title?: string) {
+  setData(object: T, filter?: string) {
     this.cursorPos = 0;
     this.data = object;
-    if (title) this.title = title;
+    if (filter) this.filter = filter;
     this.prerenderData();
   }
 
@@ -305,13 +315,15 @@ class PopupSection<T extends object> extends Section {
     return prepareCell(val, false)
       .split('\n')
       .map((row, j) =>
-        Array.from(
-          { length: Math.ceil(row.length / valWidth) },
-          (_, i) =>
-            `${(j === 0 && i === 0 ? key : '').padEnd(keyWidth)} ${row
-              .slice(i * valWidth, (i + 1) * valWidth)
-              .padEnd(valWidth)}`
-        )
+        Array.from({ length: Math.ceil(row.length / valWidth) }, (_, i) => {
+          const keyColumn = `${(j === 0 && i === 0 ? key : '').padEnd(keyWidth)}`;
+          const valColumn = `${row
+            .slice(i * valWidth, (i + 1) * valWidth)
+            .padEnd(valWidth)}`;
+          return `${keyColumn} ${valColumn.replace(this.filterRegExp, (s) =>
+            chalk(s, { color: searchHighlightColor })
+          )}`;
+        })
       )
       .flat();
   }
@@ -335,7 +347,6 @@ class ListSection<T extends object> extends Section {
   private selected: Set<T> = new Set();
   private columnsWidthes: number[];
   private fields?: Options<T>['fields'];
-  private filterRegExp?: RegExp;
   validate: Options<T>['validate'] = (_: unknown) => true;
   constructor({ data, ...options }: TSection<T> & Size) {
     super(options.title, options);
@@ -370,14 +381,10 @@ class ListSection<T extends object> extends Section {
     'ctrl-f': () => (this.filterMode = true),
   };
 
-  filterData(filterTokens: string[] = []) {
+  filterData() {
     this.cursorPos = 0;
-    this.filterRegExp =
-      filterTokens.length && new RegExp(filterTokens.join('|'), 'gi');
-    this.filtered = filterTokens.length
-      ? this.entities.filter((entity) =>
-          this.entityMatchFilter(entity, filterTokens)
-        )
+    this.filtered = this.filterTokens.length
+      ? this.entities.filter((e) => this.entityMatchFilter(e, this.filterTokens))
       : this.entities;
   }
 
@@ -406,15 +413,12 @@ class ListSection<T extends object> extends Section {
   }
 
   private entityMatchFilter(entity: T, tokens: string[]) {
-    const str = this.fields
-      .reduce(
-        (acc, f) => (
-          searchTypes.includes(typeof entity[f]) && acc.push(entity[f]), acc
-        ),
-        []
-      )
-      .join('│')
-      .toLowerCase();
+    const searchableValues = [];
+    for (const key in entity) {
+      if (searchTypes.includes(typeof entity[key]))
+        searchableValues.push(JSON.stringify(entity[key]));
+    }
+    const str = searchableValues.join('│').toLowerCase();
     return tokens.every((token) => str.includes(token));
   }
 
@@ -620,16 +624,18 @@ export class ActiveTable<Types extends object[]> {
   }
 
   private openPreview() {
-    if (!(this.activeSection instanceof ListSection)) {
+    const activeSection = this.activeSection;
+    if (!(activeSection instanceof ListSection)) {
       this.previewSection.close();
       return this.renderAll();
     }
-    const object = this.activeSection.getActiveRow();
-    const title = `preview (${this.activeSection.title} > ${
-      this.activeSection.cursorPos + 1
+    const object = activeSection.getActiveRow();
+    const title = `preview (${activeSection.title} > ${
+      activeSection.cursorPos + 1
     })`;
+    this.previewSection.setData(object, activeSection.filter);
     this.previewSection.isActive = true;
-    this.previewSection.setData(object, title);
+    this.previewSection.title = title;
   }
 
   private getResult() {
