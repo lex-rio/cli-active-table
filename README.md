@@ -4,7 +4,7 @@
 
 # cli-active-table
 
-Is an npm package for Node.js CLI applications that provides interactive tables with keyboard navigation, live preview, and support for rendering multiple lists.
+Is an npm package for Node.js CLI applications that provides interactive tables with keyboard navigation, preview, and support for rendering multiple lists.
 
 ## Installation
 
@@ -45,36 +45,57 @@ console.log(result);
 
 [Validation](./docs/examples/validation.md)
 
-[Render only specific fields](./docs/examples/fields.md)
-
 [Sorting](./docs/examples/sorting.md)
+
+[Search](./docs/examples/search.md)
 
 ### Use Сases
 
+#### Gilhub issues
 
+```sh
+npm run examples:issues
+```
 
-### Options
+#### multiple table on one screen
 
-| Option      | Description                                     | Default   |
-| ----------- | ----------------------------------------------- | --------- |
-| `--border`  | Enables table border                            | `true`    |
-| `--compact` | Removes padding between rows                    | `false`   |
-| `--width`   | Sets table width (auto, fixed, etc.)            | `auto`    |
-| `--align`   | Sets text alignment (left, center, right)       | `left`    |
-| `--theme`   | Applies a predefined color theme                | `default` |
-| `--preview` | Renders a table preview before applying changes | `false`   |
+```sh
+npm run examples:multiple
+```
+
+#### crypto currencies data from api.coingecko.com
+
+```sh
+npm run examples:crypto
+```
+
+### books list from openlibrary.org
+
+```sh
+npm run examples:books
+```
+
+#### space launches data from api.spacexdata.com
+
+```sh
+npm run examples:launches
+```
 
 ## Key bindings
 
-| Component    | Key         | Description         |
-| ------------ | ----------- | ------------------- |
-| Any          | `Ctrl+C`    | Exit application    |
-| Any          | `Tab`       | Rotate section      |
-| Any          | `Shift+Tab` | Back rotate section |
-| List Section | `Space`     | Select/Deselect row |
-| List Section | `Ctrl+a`    | Select/Deselect all |
-| List Section | `delete`    | Delete row          |
-| List Section | `Ctrl+f`    | Enable search mode  |
+| Component       | Key         | Description           |
+| --------------- | ----------- | --------------------- |
+| Any             | `Ctrl+C`    | Exit application      |
+| List Section    | `Tab`       | Rotate section        |
+| List Section    | `Shift+Tab` | Back rotate section   |
+| List Section    | `Escape`    | Return selected data  |
+| List Section    | `Enter`     | Open Preview section  |
+| List Section    | `Space`     | Select/Deselect row   |
+| List Section    | `Ctrl+a`    | Select/Deselect all   |
+| List Section    | `delete`    | Delete row            |
+| List Section    | `Ctrl+f`    | Enable search mode    |
+| Preview Section | `Escape`    | Close Preview section |
+| Preview Section | `Enter`     | Close Preview section |
 
 ## Contributing
 
