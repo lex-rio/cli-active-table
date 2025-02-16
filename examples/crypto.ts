@@ -9,14 +9,14 @@ const run = async () => {
     await new ActiveTable([
       {
         data,
-        fields: [
-          'name',
-          'symbol',
-          'price_change_24h',
-          'total_supply',
-          'max_supply',
-          'atl',
-        ],
+        // fields: [
+        //   'name',
+        //   'symbol',
+        //   'price_change_24h',
+        //   'total_supply',
+        //   'max_supply',
+        //   'atl',
+        // ],
         sortBy: [{ key: 'price_change_24h', direction: 'DESC' }],
         title: 'currencies',
       },

@@ -1,15 +1,25 @@
-[![Downloads](https://badgen.net/npm/dt/cli-active-table)](https://www.npmjs.com/package/cli-active-table)
+![npm](https://img.shields.io/npm/v/cli-active-table)
+![license](https://img.shields.io/github/license/lex-rio/cli-active-table)
+![downloads](https://img.shields.io/npm/dt/cli-active-table)
 
 # cli-active-table
 
-A lightweight JavaScript utility for rendering data in command line interface.
+Is an npm package for Node.js CLI applications that provides interactive tables with keyboard navigation, live preview, and support for rendering multiple lists.
 
 ## Installation
 
-To install the package, use the following command:
+To install the package, use the one of the following commands depending on you package manager:
 
-```bash
-npm i cli-active-table
+```sh
+npm install cli-active-table
+```
+
+```sh
+yarn add cli-active-table
+```
+
+```sh
+pnpm add cli-active-table
 ```
 
 ## Usage
@@ -17,62 +27,42 @@ npm i cli-active-table
 ### Basic usage
 
 ```typescript
-await new ActiveTable([
-  {
-    data: list,
-    fields: ['name', 'description'],
-    title: 'list3',
-  },
-]).handle();
-```
-
-![Screenshot 1](./assets/screenshot_1.png)
-
-### Validation
-
-```typescript
-const result = await new ActiveTable([
-  {
-    data: list,
-    fields: ['name', 'description'],
-    title: 'list',
-    validate: (list, error) => {
-      if (list.length > 0) {
-        return true;
-      }
-      error.message = 'choose at least one';
-      return false;
-    },
-  },
-]).handle();
+const data = [
+  { id: 1, name: 'name1', description: 'description1' },
+  { id: 2, name: 'name2', description: 'description2' },
+  { id: 3, name: 'name3', description: 'description3' },
+];
+const table = new ActiveTable([{ data }]);
+const result = await table.handle();
 console.log(result);
 ```
 
-![Screenshot 2](./assets/screenshot_2.png)
+![Screenshot 1](./assets/basic.png)
 
-### Multiple tables
+### More examples
 
-```typescript
-const result = await new ActiveTable([
-  {
-    data: list,
-    fields: ['name', 'description'],
-    title: 'list',
-  },
-  {
-    data: list,
-    fields: ['name'],
-    title: 'list3',
-  },
-  {
-    data: list2,
-    fields: ['title', 'description'],
-    title: 'title 5',
-  },
-]).handle();
-```
+[Multiple tables](./docs/examples/multiple.md)
 
-![Screenshot 3](./assets/screenshot_3.png)
+[Validation](./docs/examples/validation.md)
+
+[Render only specific fields](./docs/examples/fields.md)
+
+[Sorting](./docs/examples/sorting.md)
+
+### Use Сases
+
+
+
+### Options
+
+| Option      | Description                                     | Default   |
+| ----------- | ----------------------------------------------- | --------- |
+| `--border`  | Enables table border                            | `true`    |
+| `--compact` | Removes padding between rows                    | `false`   |
+| `--width`   | Sets table width (auto, fixed, etc.)            | `auto`    |
+| `--align`   | Sets text alignment (left, center, right)       | `left`    |
+| `--theme`   | Applies a predefined color theme                | `default` |
+| `--preview` | Renders a table preview before applying changes | `false`   |
 
 ## Key bindings
 

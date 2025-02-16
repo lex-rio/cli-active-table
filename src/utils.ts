@@ -52,3 +52,34 @@ export const chalk = (
       )
     : `${code}${str}${ANSI_RESET}`;
 };
+
+export function limitString(limit: number, string = '') {
+  return string.length < limit
+    ? string
+    : `…${string.slice(string.length + 4 - limit)}`;
+}
+
+export function monoString(char: string, len: number) {
+  return new Array(len + 1).join(char);
+}
+
+export function prepareCell(cell: unknown, compact = true) {
+  if (cell instanceof Date) {
+    return cell.toISOString();
+  }
+  const cellType = typeof cell;
+  if (cell && cellType === 'object') {
+    return compact ? cellType : JSON.stringify(cell, null, 2).normalize('NFC');
+  }
+  return compact
+    ? limitString(50, `${cell}`.normalize('NFC'))
+    : `${cell}`.normalize('NFC');
+}
+
+export function detectFields(list: unknown[]) {
+  return list?.length
+    ? Object.entries(list[0])
+        .filter(([_, val]) => prepareCell(val) !== 'object')
+        .map(([key]) => key)
+    : ['provided data list is empty'];
+}
