@@ -607,7 +607,7 @@ export class ActiveTable<Types extends object[]> {
       this.sections[current + delta] ||
       this.sections[backward ? this.sections.length - 1 : 0];
     next.isActive = true;
-    next.render();
+    this.sections[current].render();
   }
 
   private get activeSection() {
