@@ -97,8 +97,8 @@ class Section {
       filter
         .match(/"([^"]+)"|\S+/g)
         ?.map((token) => token.replace(/(^"|"$)/g, '')) || [];
-    this.filterRegExp =
-      this.filterTokens.length && new RegExp(this.filterTokens.join('|'), 'gi');
+    if (this.filterTokens.length)
+      this.filterRegExp = new RegExp(this.filterTokens.join('|'), 'gi');
   }
 
   get coords() {
