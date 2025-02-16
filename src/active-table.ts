@@ -44,6 +44,7 @@ class Section {
   #coords = { x: 0, y: 0 };
   #originalTitle: string;
   #renderedTitle: string;
+  #prerender: string[] = [];
   private error = '';
   private extraRowsCount: number;
   protected contentSize: number;
@@ -103,7 +104,6 @@ class Section {
     } else if (this.contentSize - this.viewportPos < this.viewportSize) {
       this.viewportPos = Math.max(this.contentSize - this.viewportSize, 0);
     }
-    // debugSection.setData({ viewportPos: this.viewportPos });
   }
 
   get size() {
@@ -161,7 +161,7 @@ class Section {
     return [] as string[];
   }
 
-  render() {
+  render(force = false) {
     let data: string[] = [];
     try {
       const rows = this.renderData();
@@ -179,9 +179,17 @@ class Section {
     }
     const { x, y } = this.coords;
     data.forEach((row, i) => {
+      if (!force && row === this.#prerender[i]) return;
+      this.#prerender[i] = row;
       readline.cursorTo(process.stdout, x, y + i);
       process.stdout.write(row);
     });
+    this.#prerender.length = data.length;
+  }
+
+  close() {
+    this.isActive = false;
+    this.#prerender = [];
   }
 
   handleTyping(key: Key) {
@@ -261,7 +269,7 @@ class Section {
 
 class PopupSection<T extends object> extends Section {
   data: T = {} as T;
-  prerendered: string[] = [];
+  content: string[] = [];
 
   setData(object: T, title?: string) {
     this.cursorPos = 0;
@@ -275,11 +283,10 @@ class PopupSection<T extends object> extends Section {
       ...Object.keys(this.data).map(({ length }) => length)
     );
     const valueColumnWidth = this.innerSize().width - keyColumnWidth - 1;
-    this.prerendered = Object.entries(this.data).reduce((acc, entry) => {
-      acc.push(...this.renderRow(entry, [keyColumnWidth, valueColumnWidth]));
-      return acc;
-    }, []);
-    this.contentSize = this.prerendered.length;
+    this.content = Object.entries(this.data)
+      .map((entry) => this.renderRow(entry, [keyColumnWidth, valueColumnWidth]))
+      .flat();
+    this.contentSize = this.content.length;
   }
 
   private renderRow([key, val]: string[], [keyWidth, valWidth]: number[]) {
@@ -298,10 +305,15 @@ class PopupSection<T extends object> extends Section {
   }
 
   protected renderData() {
-    return this.prerendered.slice(
+    return this.content.slice(
       this.viewportPos,
       this.viewportPos + this.viewportSize
     );
+  }
+
+  close() {
+    this.content = [];
+    super.close();
   }
 }
 
@@ -542,9 +554,7 @@ export class ActiveTable<Types extends object[]> {
 
   private renderAll() {
     this.clear();
-    this.sections.forEach(
-      (section) => section instanceof ListSection && section.render()
-    );
+    this.sections.forEach((section) => section.render(true));
   }
 
   private defineLayout(sections: Section[]) {
@@ -606,8 +616,7 @@ export class ActiveTable<Types extends object[]> {
 
   private openPreview() {
     if (!(this.activeSection instanceof ListSection)) {
-      this.previewSection.isActive = false;
-      this.sections.filter((section) => section !== this.previewSection);
+      this.previewSection.close();
       return this.renderAll();
     }
     const object = this.activeSection.getActiveRow();
@@ -685,7 +694,6 @@ export class ActiveTable<Types extends object[]> {
             resolve(this.returnData);
           }
           this.activeSection.render();
-          // debugSection.render();
         });
       }
     );
@@ -695,6 +703,3 @@ export class ActiveTable<Types extends object[]> {
     return ids;
   }
 }
-
-// const debugSection = new PopupSection('debug', { height: 20, width: 20 });
-// debugSection.coords = { x: 0, y: 0 };
