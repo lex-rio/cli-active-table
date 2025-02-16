@@ -1,6 +1,7 @@
-import * as readline from 'node:readline';
 import { chalk, detectFields, limitString, monoString, prepareCell } from './utils';
+import { Key, UserIO } from './io';
 
+let io: UserIO;
 const searchHighlightColor = 'magenta';
 const searchTypes = ['string', 'number'];
 const columnSeparator = ' ';
@@ -13,14 +14,6 @@ const border = {
   leftBottom: '╰',
   rightBottom: '╯',
   scroll: '▓',
-};
-
-type Key = {
-  sequence: string;
-  name: string;
-  ctrl: boolean;
-  meta: boolean;
-  shift: boolean;
 };
 
 type Size = { height?: number; width?: number };
@@ -64,7 +57,31 @@ class Section {
     right: () => (this.cursorPos += this.contentSize),
   };
 
-  constructor(originalTitle = '', size: Size = {}) {
+  shift = {
+    cursor: (val: number) => {
+      const bottomLimit = this.contentSize - 1;
+      this.#cursorPos = Math.max(0, Math.min(val, bottomLimit));
+      if (this.#cursorPos < this.viewportPos) {
+        this.viewportPos = this.#cursorPos;
+      } else if (this.#cursorPos >= this.viewportPos + this.viewportSize) {
+        this.viewportPos =
+          this.#cursorPos - Math.min(this.viewportSize, this.contentSize) + 1;
+      } else if (this.contentSize - this.viewportPos < this.viewportSize) {
+        this.viewportPos = Math.max(this.contentSize - this.viewportSize, 0);
+      }
+    },
+    viewport: (val: number) => {
+      const bottomLimit = this.contentSize - this.viewportSize;
+      this.#cursorPos = Math.max(0, Math.min(val, bottomLimit));
+      this.viewportPos = this.#cursorPos;
+    },
+  };
+
+  constructor(
+    originalTitle = '',
+    size: Size = {},
+    private navigationMode: keyof typeof this.shift = 'cursor'
+  ) {
     this.#originalTitle = originalTitle;
     this.size = size;
   }
@@ -95,15 +112,7 @@ class Section {
     if (this.#cursorPos === val) return;
     this.error = '';
     if (val) this.filterMode = false; // if cursorPos > 0, means we were navigating, and we want to turn off filter mode
-    this.#cursorPos = Math.max(0, Math.min(val, this.contentSize - 1));
-    if (this.#cursorPos < this.viewportPos) {
-      this.viewportPos = this.#cursorPos;
-    } else if (this.#cursorPos >= this.viewportPos + this.viewportSize) {
-      this.viewportPos =
-        this.#cursorPos - Math.min(this.viewportSize, this.contentSize) + 1;
-    } else if (this.contentSize - this.viewportPos < this.viewportSize) {
-      this.viewportPos = Math.max(this.contentSize - this.viewportSize, 0);
-    }
+    this.shift[this.navigationMode](val);
   }
 
   get size() {
@@ -181,8 +190,7 @@ class Section {
     data.forEach((row, i) => {
       if (!force && row === this.#prerender[i]) return;
       this.#prerender[i] = row;
-      readline.cursorTo(process.stdout, x, y + i);
-      process.stdout.write(row);
+      io.writeLine(row, x, y + i);
     });
     this.#prerender.length = data.length;
   }
@@ -270,6 +278,10 @@ class Section {
 class PopupSection<T extends object> extends Section {
   data: T = {} as T;
   content: string[] = [];
+
+  constructor() {
+    super('', {}, 'viewport');
+  }
 
   setData(object: T, title?: string) {
     this.cursorPos = 0;
@@ -495,6 +507,7 @@ export class ActiveTable<Types extends object[]> {
   private returnData: { [Index in keyof Types]: Types[Index][] };
 
   constructor(sections: { [Index in keyof Types]: TSection<Types[Index]> }) {
+    io = new UserIO(process.stdin, process.stdout);
     this.updateViewport();
     this.sections = sections.map(
       (config) => new ListSection({ ...config, ...this.detectTableLayout(config) })
@@ -542,14 +555,6 @@ export class ActiveTable<Types extends object[]> {
 
   private clear() {
     process.stdout.write('\u001b[H\u001b[J');
-  }
-
-  private hideCursor() {
-    process.stdout.write('\u001b[?25l');
-  }
-
-  private returnCursor() {
-    process.stdout.write('\u001b[?25h');
   }
 
   private renderAll() {
@@ -663,19 +668,12 @@ export class ActiveTable<Types extends object[]> {
   }
 
   async handle() {
-    this.hideCursor();
+    io.prepare();
     this.initScreen();
     process.stdout.on('resize', () => this.initScreen());
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      terminal: false, // We don’t need the prompt to be shown
-    });
-    if (process.stdin.isTTY) process.stdin.setRawMode(true);
-    readline.emitKeypressEvents(process.stdin, rl);
     const ids = await new Promise<{ [Index in keyof Types]: Types[Index][] }>(
       (resolve) => {
-        process.stdin.on('keypress', (_: string, key: Key) => {
+        io.on('key', (key: Key) => {
           const hotkey = this.getHotKeyCode(key);
           if (hotkey in this.activeSection.navigation) {
             this.activeSection.navigation[
@@ -699,7 +697,7 @@ export class ActiveTable<Types extends object[]> {
     );
 
     this.clear();
-    this.returnCursor();
+    io.returnDefault();
     return ids;
   }
 }
