@@ -4,3 +4,5 @@ src/
 tsconfig.json
 .gitignore
 .vscode
+dist/**/*.d.ts
+!dist/active-table.d.ts

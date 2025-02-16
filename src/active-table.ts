@@ -142,7 +142,7 @@ class Section {
   }
 
   innerSize() {
-    const borders = border.vertical.length * 2;
+    const borders = 2;
     return {
       height: this.#size.height - borders,
       width: this.#size.width - borders,
@@ -293,10 +293,10 @@ class PopupSection<T extends object> extends Section {
     super('', {}, 'viewport');
   }
 
-  setData(object: T, filter?: string) {
+  setData(object: T, filter = '') {
     this.cursorPos = 0;
     this.data = object;
-    if (filter) this.filter = filter;
+    this.filter = filter;
     this.prerenderData();
   }
 

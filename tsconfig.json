@@ -6,7 +6,7 @@
     "noImplicitAny": true,
     "preserveConstEnums": true,
     "outDir": "./dist",
-    "sourceMap": true,
+    "sourceMap": false,
     "resolveJsonModule": true
     // "strict": true
   },
