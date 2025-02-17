@@ -26,6 +26,8 @@ const styles = {
   inverted: '7',
 };
 
+const searchHighlightColor = 'magenta';
+
 const ANSI_RESET = '\x1b[0m';
 
 export const chalk = (
@@ -82,4 +84,18 @@ export function detectFields(list: unknown[]) {
         .filter(([_, val]) => prepareCell(val) !== 'object')
         .map(([key]) => key)
     : ['provided data list is empty'];
+}
+
+export function isKey<T extends object>(
+  k: string,
+  obj: T
+): k is Extract<keyof T, string> {
+  return k in obj;
+}
+
+export function highlightSearch(
+  str: string,
+  style: Parameters<typeof chalk>[1] = {}
+) {
+  return chalk(str, { ...style, color: searchHighlightColor });
 }
