@@ -117,10 +117,10 @@ export class ActiveTable<Types extends object[]> {
         section.setError(error.message);
         if (!section.isActive) {
           const previousActive = this.activeSection;
-          section.isActive = true;
           previousActive.isActive = false;
+          section.isActive = true;
+          this.printSection(previousActive);
         }
-        this.printSection(section);
         return true;
       });
     if (!isInvalid) this.returnData = result;
