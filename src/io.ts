@@ -29,36 +29,43 @@ export type Mouse = {
   type: (typeof events)[keyof typeof events];
 };
 
-const keyMap: Record<string, string> = {
-  ' ': 'space',
-  '\r': 'return',
-  '\n': 'enter',
-  '\t': 'tab',
-  '\b': 'backspace',
-  '\x7f': 'backspace',
-  '\x1b': 'escape',
-  '\x1B[6~': 'pagedown',
-  '\x1B[5~': 'pageup',
-  '\x1B[3~': 'delete',
-  '\x1b[A': 'up',
-  '\x1b[B': 'down',
-  '\x1b[C': 'right',
-  '\x1b[D': 'left',
+const keyMap: Record<string, [string, boolean, boolean]> = {
+  ' ': ['space', false, false],
+  '\x00': ['space', true, false],
+  '\r': ['return', false, false],
+  '\x1BOM': ['return', false, true],
+  '\t': ['tab', false, false],
+  '\x1B[Z': ['tab', false, true],
+  '\b': ['backspace', true, false],
+  '\x7f': ['backspace', false, false],
+  '\x1B': ['escape', false, false],
+  '\x1B[6~': ['pagedown', false, false],
+  '\x1B[5~': ['pageup', false, false],
+  '\x1B[3~': ['delete', false, false],
+  '\x1B[3;5~': ['delete', true, false],
+  '\x1B[3;2~': ['delete', false, true],
+  '\x1b[A': ['up', false, false],
+  '\x1B[1;5A': ['up', true, false],
+  '\x1b[B': ['down', false, false],
+  '\x1B[1;5B': ['down', true, false],
+  '\x1b[C': ['right', false, false],
+  '\x1B[1;5C': ['right', true, false],
+  '\x1b[D': ['left', false, false],
+  '\x1B[1;5D': ['left', true, false],
 };
-const getKey = (seq: string) => {
-  const name =
-    keyMap[seq] ||
-    (seq.length === 1 && seq.charCodeAt(0) < 32
-      ? String.fromCharCode(seq.charCodeAt(0) + 96)
-      : seq);
-  const spec = seq in keyMap;
-  const sequence = name.toLowerCase();
+const getKey = (sequence: string) => {
+  const key = keyMap[sequence] || [
+    sequence.length === 1 && sequence.charCodeAt(0) < 32
+      ? String.fromCharCode(sequence.charCodeAt(0) + 96)
+      : sequence,
+  ];
+  const spec = sequence in keyMap;
+  const [name, ctrl, shift] = key;
   return {
-    name: sequence,
     sequence,
-    ctrl: !spec && seq.charCodeAt(0) < 32,
-    meta: !spec && seq.charCodeAt(0) === 27,
-    shift: /[A-Z]/.test(name),
+    name: name.toLowerCase(),
+    ctrl: spec ? ctrl : sequence.charCodeAt(0) < 32,
+    shift: spec ? shift : /[A-Z]/.test(name),
   };
 };
 

@@ -20,13 +20,10 @@ export class ActiveTable<Types extends object[]> {
   }
 
   private keyActions: Record<string, () => unknown> = {
-    'ctrl-c': () => this.getResult(),
+    'ctrl-c': () => this.cancel(),
     tab: () => this.rotateSections(),
     'shift-tab': () => this.rotateSections(true),
-    escape: () =>
-      this.activeSection instanceof PopupSection
-        ? this.togglePreview()
-        : this.getResult(),
+    escape: () => this.cancel(),
     return: () => this.togglePreview(),
   };
 
@@ -53,7 +50,7 @@ export class ActiveTable<Types extends object[]> {
         };
       }
     });
-    const padding = 5;
+    const padding = 4;
     this.previewSection.size = {
       width: this.io.viewport.columns - padding * 2,
       height: this.io.viewport.rows - padding * 2,
@@ -69,17 +66,18 @@ export class ActiveTable<Types extends object[]> {
   }
 
   private rotateSections(backward = false) {
-    const current = Math.max(
+    if (this.activeSection instanceof PopupSection) return;
+    const index = Math.max(
       0,
-      this.sections.findIndex(({ isActive }) => isActive)
+      this.sections.findIndex((s) => s === this.activeSection)
     );
-    this.sections[current].isActive = false;
+    this.activeSection.isActive = false;
     const delta = backward ? -1 : 1;
     const next =
-      this.sections[current + delta] ||
+      this.sections[index + delta] ||
       this.sections[backward ? this.sections.length - 1 : 0];
     next.isActive = true;
-    this.printSection(this.sections[current]);
+    this.printSection(this.sections[index]);
   }
 
   private get activeSection() {
@@ -101,6 +99,12 @@ export class ActiveTable<Types extends object[]> {
     this.previewSection.setData(object, activeSection.filter);
     this.previewSection.isActive = true;
     this.previewSection.title = title;
+  }
+
+  private cancel() {
+    this.activeSection instanceof PopupSection
+      ? this.togglePreview()
+      : this.getResult();
   }
 
   private getResult() {

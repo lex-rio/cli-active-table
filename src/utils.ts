@@ -99,3 +99,7 @@ export function highlightSearch(
 ) {
   return chalk(str, { ...style, color: searchHighlightColor });
 }
+
+export function escape(str = '') {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

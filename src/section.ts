@@ -1,5 +1,5 @@
 import { Coords, Key } from './io';
-import { chalk, highlightSearch, limitString, monoString } from './utils';
+import { chalk, escape, highlightSearch, limitString, monoString } from './utils';
 
 const border = {
   vertical: '│',
@@ -81,7 +81,7 @@ export class Section {
     this.filterTokens =
       filter
         .match(/"([^"]+)"|\S+/g)
-        ?.map((token) => token.replace(/(^"|"$)/g, '')) || [];
+        ?.map((token) => escape(token.replace(/(^"|"$)/g, ''))) || [];
     if (this.filterTokens.length)
       this.filterRegExp = new RegExp(this.filterTokens.join('|'), 'gi');
   }
@@ -193,6 +193,7 @@ export class Section {
     if (key.name === 'backspace') {
       this.filter = key.ctrl ? '' : this.filter.slice(0, -1) || '';
     } else {
+      if (key.ctrl) return;
       this.filter += key.sequence.toLowerCase();
     }
     this.filterData();
