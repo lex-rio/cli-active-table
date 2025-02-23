@@ -36,9 +36,9 @@ export class PopupSection<T extends object> extends Section {
           const valColumn = `${row
             .slice(i * valWidth, (i + 1) * valWidth)
             .padEnd(valWidth)}`;
-          return `${keyColumn} ${valColumn.replace(this.filterRegExp, (s) =>
-            highlightSearch(s)
-          )}`;
+          return this.filterRegExp
+            ? `${keyColumn} ${valColumn.replace(this.filterRegExp, highlightSearch)}`
+            : `${keyColumn} ${valColumn}`;
         })
       )
       .flat();

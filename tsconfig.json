@@ -7,8 +7,8 @@
     "preserveConstEnums": true,
     "outDir": "./dist",
     "sourceMap": false,
-    "resolveJsonModule": true
-    // "strict": true
+    "resolveJsonModule": true,
+    "strict": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "**/*.spec.ts"]

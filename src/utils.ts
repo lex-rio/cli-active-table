@@ -78,7 +78,7 @@ export function prepareCell(cell: unknown, compact = true) {
     : `${cell}`.normalize('NFC');
 }
 
-export function detectFields(list: unknown[]) {
+export function detectFields(list: object[]) {
   return list?.length
     ? Object.entries(list[0])
         .filter(([_, val]) => prepareCell(val) !== 'object')
