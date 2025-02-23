@@ -8,7 +8,7 @@ export class ActiveTable<Types extends object[]> {
   private io: UserIO;
   private sections: Section[] = [];
   private previewSection: PopupSection<{}>;
-  private returnData: { [Index in keyof Types]: Types[Index][] };
+  private returnData?: { [Index in keyof Types]: Types[Index][] };
 
   constructor(sections: { [Index in keyof Types]: TSection<Types[Index]> }) {
     this.io = new UserIO(process.stdin, process.stdout);

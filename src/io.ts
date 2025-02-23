@@ -35,9 +35,11 @@ const keyMap: Record<string, string> = {
   '\n': 'enter',
   '\t': 'tab',
   '\b': 'backspace',
-  '\x1B[3~': 'delete',
   '\x7f': 'backspace',
   '\x1b': 'escape',
+  '\x1B[6~': 'pagedown',
+  '\x1B[5~': 'pageup',
+  '\x1B[3~': 'delete',
   '\x1b[A': 'up',
   '\x1b[B': 'down',
   '\x1b[C': 'right',
@@ -62,13 +64,11 @@ const getKey = (seq: string) => {
 
 export class UserIO extends EventEmitter {
   private cache: Map<Coords, string[]> = new Map();
-  #viewport: { columns: number; rows: number };
+  #viewport = { columns: 0, rows: 0 };
 
-  constructor(input: NodeJS.ReadStream, private output: NodeJS.WriteStream) {
+  constructor(private input: NodeJS.ReadStream, private output: NodeJS.WriteStream) {
     super();
     this.updateViewport();
-    if (input.isTTY) input.setRawMode(true);
-
     input.on('data', (event) => {
       const data = event.toString();
       const match = data.match(/\x1b\[<(\d+);(\d+);(\d+)([Mm]?)/);
@@ -108,6 +108,7 @@ export class UserIO extends EventEmitter {
   }
 
   prepare() {
+    if (this.input.isTTY) this.input.setRawMode(true);
     this.output.write('\u001b[?25l'); // hide cursor
     this.output.write('\x1b[?1003h'); // mouse detection mode
     this.output.write('\x1b[?1006h'); // SGR-mode on
@@ -121,7 +122,7 @@ export class UserIO extends EventEmitter {
 
   print(rows: string[], coords: Coords, force = false) {
     if (!this.cache.has(coords)) this.cache.set(coords, []);
-    const cache = this.cache.get(coords);
+    const cache = this.cache.get(coords) as string[];
     rows.forEach((row, i) => {
       if (!force && row === cache[i]) return;
       cache[i] = row;

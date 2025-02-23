@@ -1,5 +1,5 @@
 import { Key } from './io';
-import { Section, Size } from './section';
+import { Section } from './section';
 import {
   chalk,
   detectFields,
@@ -8,12 +8,17 @@ import {
   prepareCell,
 } from './utils';
 
+type Validator<T extends object> = (
+  selectedList: T[],
+  { message }: { message: string }
+) => boolean;
+
 type Options<T extends object, F extends keyof T = keyof T> = {
   fields?: F[];
   columnsWidthes?: number[];
   sortBy?: { key: F; direction?: 'ASC' | 'DESC' }[];
   title?: string;
-  validate?: (selectedList: T[], { message }: { message: string }) => boolean;
+  validate?: Validator<T>;
 };
 
 export type TSection<T extends object> = {
@@ -29,14 +34,14 @@ export class ListSection<T extends object> extends Section {
   private filtered: T[];
   private selected: Set<T> = new Set();
   private columnsWidthes: number[];
-  private fields?: Options<T>['fields'];
-  validate: Options<T>['validate'] = (_: unknown) => true;
-  constructor(options: TSection<T>, private maxWidth: number) {
-    super(options.title);
+  private fields: (keyof T)[];
+  validate: Validator<T> = (_: T[], _error: unknown) => true;
+  constructor({ sortBy, title, ...options }: TSection<T>, private maxWidth: number) {
+    super(title);
     this.entities = options.data;
-    this.filtered = options.sortBy
+    this.filtered = sortBy
       ? this.entities.sort((a, b) => {
-          for (const { key, direction } of options.sortBy) {
+          for (const { key, direction } of sortBy) {
             return a[key] < b[key] && direction === 'DESC' ? 1 : -1;
           }
           return 0;

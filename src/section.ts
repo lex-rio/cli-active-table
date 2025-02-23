@@ -11,21 +11,21 @@ const border = {
   scroll: '▓',
 };
 
-export type Size = { height?: number; width?: number };
+export type Size = { height: number; width: number };
 
 export class Section {
   #cursorPos = 0;
   #isActive = false;
-  #size: Size = {};
+  #size: Size = { height: 0, width: 0 };
   #coords: Coords = { x: 0, y: 0 };
   #originalTitle: string;
-  #renderedTitle: string;
+  #renderedTitle = '';
   #filter = '';
   #viewportPos = 0;
   private error = '';
   private extraRowsCount: number;
-  protected contentSize: number;
-  protected viewportSize: number;
+  protected contentSize = 0;
+  protected viewportSize = 0;
   protected filterMode = false;
   protected filterTokens: string[] = [];
   protected filterRegExp?: RegExp;
@@ -65,6 +65,7 @@ export class Section {
     private navigationMode: keyof typeof this.shift = 'cursor'
   ) {
     this.#originalTitle = originalTitle;
+    this.extraRowsCount = this.countExtraRows();
   }
 
   get viewportPos() {
@@ -114,15 +115,15 @@ export class Section {
     this.shift[this.navigationMode](val);
   }
 
-  get size() {
+  get size(): Size {
     return this.#size;
   }
 
-  set size({ height, width }: Size) {
+  set size({ height, width }: Partial<Size>) {
     this.#size.height = height ?? this.#size.height;
     this.#size.width = width ?? this.#size.width;
     this.title = this.#originalTitle;
-    this.viewportSize = this.#size.height - this.getExtraRowsCount();
+    this.viewportSize = this.#size.height - this.extraRowsCount;
   }
 
   innerSize() {
@@ -146,15 +147,13 @@ export class Section {
     this.error = message;
   }
 
-  private getExtraRowsCount() {
-    this.extraRowsCount ||= [
+  private countExtraRows() {
+    return [
       border.horisontal,
       this.renderHeader(),
       this.renderFooter(),
       border.horisontal,
     ].filter(Boolean).length;
-
-    return this.extraRowsCount;
   }
 
   protected renderHeader() {}
@@ -169,8 +168,8 @@ export class Section {
     try {
       const rows = this.renderData();
       const emptyRow = monoString(' ', this.innerSize().width);
-      const enptyCount = this.viewportSize - rows.length;
-      const emptyRows = enptyCount > 0 ? new Array(enptyCount).fill(emptyRow) : [];
+      const emptyCount = this.viewportSize - rows.length;
+      const emptyRows = emptyCount > 0 ? new Array(emptyCount).fill(emptyRow) : [];
       return this.wrap(
         [this.renderHeader(), ...rows, ...emptyRows, this.renderFooter()].filter(
           Boolean
@@ -178,7 +177,10 @@ export class Section {
         this.contentSize
       );
     } catch (e) {
-      return [e.message, ...e.stack.split('\n')] as string[];
+      return [
+        (e as Error).message,
+        ...((e as Error)?.stack?.split('\n') as string[]),
+      ];
     }
   }
 
